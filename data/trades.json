@@ -1,0 +1,72 @@
+[
+  {
+    "order_id": "725AC4F0",
+    "symbol": "GOLDPETAL APR FUT-30Apr26",
+    "side": "SELL",
+    "qty": 1,
+    "fill_price": 14770.215,
+    "timestamp": "2026-03-26T03:20:54.504050",
+    "commission": 20.0,
+    "slippage": 14.784999999999854,
+    "mode": "paper",
+    "partial": false,
+    "remaining_qty": 0.0,
+    "metadata": {}
+  },
+  {
+    "order_id": "452373C3",
+    "symbol": "GOLDPETAL APR FUT-30Apr26",
+    "side": "SELL",
+    "qty": 1,
+    "fill_price": 14770.215,
+    "timestamp": "2026-03-26T03:22:16.653834",
+    "commission": 20.0,
+    "slippage": 14.784999999999854,
+    "mode": "paper",
+    "partial": false,
+    "remaining_qty": 0.0,
+    "metadata": {}
+  },
+  {
+    "order_id": "5BC1B9DF",
+    "symbol": "GOLDPETAL APR FUT-30Apr26",
+    "side": "SELL",
+    "qty": 1,
+    "fill_price": 14770.215,
+    "timestamp": "2026-03-26T03:25:45.659889",
+    "commission": 20.0,
+    "slippage": 14.784999999999854,
+    "mode": "paper",
+    "partial": false,
+    "remaining_qty": 0.0,
+    "metadata": {}
+  },
+  {
+    "order_id": "644194C8",
+    "symbol": "GOLDPETAL APR FUT-30Apr26",
+    "side": "SELL",
+    "qty": 1,
+    "fill_price": 14770.215,
+    "timestamp": "2026-03-26T03:25:51.425388",
+    "commission": 20.0,
+    "slippage": 14.784999999999854,
+    "mode": "paper",
+    "partial": false,
+    "remaining_qty": 0.0,
+    "metadata": {}
+  },
+  {
+    "order_id": "A7EC6C83",
+    "symbol": "GOLDPETAL APR FUT-30Apr26",
+    "side": "SELL",
+    "qty": 1,
+    "fill_price": 14770.215,
+    "timestamp": "2026-03-26T03:29:23.959078",
+    "commission": 20.0,
+    "slippage": 14.784999999999854,
+    "mode": "paper",
+    "partial": false,
+    "remaining_qty": 0.0,
+    "metadata": {}
+  }
+]

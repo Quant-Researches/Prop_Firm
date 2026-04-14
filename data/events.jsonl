@@ -1,0 +1,176 @@
+{"timestamp": "2026-03-25T22:06:16.314609", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-25T22:06:17.174002", "kind": "market", "msg": "Fetched 1500 candles via yfinance"}
+{"timestamp": "2026-03-25T22:06:17.695361", "kind": "signal", "msg": "Phase: SIDEWAYS | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-25T22:06:17.697470", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-25T22:06:34.682897", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-25T22:06:35.417550", "kind": "market", "msg": "Fetched 1500 candles via yfinance"}
+{"timestamp": "2026-03-25T22:06:35.948042", "kind": "signal", "msg": "Phase: SIDEWAYS | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-25T22:06:35.949435", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-25T22:06:55.877107", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-25T22:06:56.761342", "kind": "market", "msg": "Fetched 1500 candles via yfinance"}
+{"timestamp": "2026-03-25T22:06:57.267529", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-25T22:06:57.268046", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-26T08:13:29.838960", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:13:30.968776", "kind": "market", "msg": "Fetched 1500 candles via yfinance"}
+{"timestamp": "2026-03-26T08:13:31.494974", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-26T08:13:31.496224", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-26T08:14:22.425505", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:14:23.159971", "kind": "market", "msg": "Fetched 1500 candles via yfinance"}
+{"timestamp": "2026-03-26T08:14:23.720059", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-26T08:14:23.720593", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-26T08:14:32.007655", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:14:33.050863", "kind": "market", "msg": "Fetched 1500 candles via yfinance"}
+{"timestamp": "2026-03-26T08:14:33.586997", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-26T08:14:33.587995", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-26T08:14:53.653967", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:14:54.504161", "kind": "market", "msg": "Fetched 1500 candles via yfinance"}
+{"timestamp": "2026-03-26T08:14:55.047276", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-26T08:14:55.048434", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-26T08:46:12.135204", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:46:12.308000", "kind": "error", "msg": "Data fetch failed: Dhan API Error: HTTP 401: {\"errorType\":\"Invalid_Authentication\",\"errorCode\":\"DH-901\",\"errorMessage\":\"Client ID or user generated access token is invalid or expired.\"}"}
+{"timestamp": "2026-03-26T08:49:32.848665", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:49:33.105751", "kind": "error", "msg": "Data fetch failed: Dhan API Error: HTTP 401: {\"errorType\":\"Invalid_Authentication\",\"errorCode\":\"DH-901\",\"errorMessage\":\"Client ID or user generated access token is invalid or expired.\"}"}
+{"timestamp": "2026-03-26T08:49:36.016968", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:49:36.105594", "kind": "error", "msg": "Data fetch failed: Dhan API Error: HTTP 401: {\"errorType\":\"Invalid_Authentication\",\"errorCode\":\"DH-901\",\"errorMessage\":\"Client ID or user generated access token is invalid or expired.\"}"}
+{"timestamp": "2026-03-26T08:50:09.854386", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:50:09.952419", "kind": "error", "msg": "Data fetch failed: Dhan API Error: HTTP 401: {\"errorType\":\"Invalid_Authentication\",\"errorCode\":\"DH-901\",\"errorMessage\":\"Client ID or user generated access token is invalid or expired.\"}"}
+{"timestamp": "2026-03-26T08:50:30.482351", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:50:30.883700", "kind": "market", "msg": "Fetched 1043 candles via dhan"}
+{"timestamp": "2026-03-26T08:50:31.364762", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-26T08:50:31.365763", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-26T08:50:53.404572", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:50:53.917910", "kind": "market", "msg": "Fetched 1486 candles via dhan"}
+{"timestamp": "2026-03-26T08:50:54.503051", "kind": "signal", "msg": "Phase: BEARISH | Signal: SELL | Reason: Breakdown < Low (14800.00) + Phase BEARISH + ATR \u2191"}
+{"timestamp": "2026-03-26T08:50:54.503051", "kind": "order", "msg": "OMS Submit: SELL 1x GOLDPETAL APR FUT-30Apr26 @ ~14785.00"}
+{"timestamp": "2026-03-26T08:50:54.504050", "kind": "fill", "msg": "Simulated Fill: 1x @ 14770.22 (comm: \u20b920.0)"}
+{"timestamp": "2026-03-26T08:50:54.510591", "kind": "info", "msg": "Tick Complete. Open Pos: 1 | Equity: \u20b999,965.21 | uPnL: \u20b9-14.78"}
+{"timestamp": "2026-03-26T08:52:15.549666", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:52:16.109460", "kind": "market", "msg": "Fetched 1486 candles via dhan"}
+{"timestamp": "2026-03-26T08:52:16.651837", "kind": "signal", "msg": "Phase: BEARISH | Signal: SELL | Reason: Breakdown < Low (14800.00) + Phase BEARISH + ATR \u2191"}
+{"timestamp": "2026-03-26T08:52:16.652831", "kind": "order", "msg": "OMS Submit: SELL 1x GOLDPETAL APR FUT-30Apr26 @ ~14785.00"}
+{"timestamp": "2026-03-26T08:52:16.653834", "kind": "fill", "msg": "Simulated Fill: 1x @ 14770.22 (comm: \u20b920.0)"}
+{"timestamp": "2026-03-26T08:52:16.660982", "kind": "info", "msg": "Tick Complete. Open Pos: 1 | Equity: \u20b999,965.21 | uPnL: \u20b9-14.78"}
+{"timestamp": "2026-03-26T08:55:44.450722", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:55:45.081726", "kind": "market", "msg": "Fetched 1486 candles via dhan"}
+{"timestamp": "2026-03-26T08:55:45.658041", "kind": "signal", "msg": "Phase: BEARISH | Signal: SELL | Reason: Breakdown < Low (14800.00) + Phase BEARISH + ATR \u2191"}
+{"timestamp": "2026-03-26T08:55:45.658921", "kind": "order", "msg": "OMS Submit: SELL 1x GOLDPETAL APR FUT-30Apr26 @ ~14785.00"}
+{"timestamp": "2026-03-26T08:55:45.659889", "kind": "fill", "msg": "Simulated Fill: 1x @ 14770.22 (comm: \u20b920.0)"}
+{"timestamp": "2026-03-26T08:55:45.664474", "kind": "info", "msg": "Tick Complete. Open Pos: 1 | Equity: \u20b999,965.21 | uPnL: \u20b9-14.78"}
+{"timestamp": "2026-03-26T08:55:50.366736", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:55:50.889083", "kind": "market", "msg": "Fetched 1486 candles via dhan"}
+{"timestamp": "2026-03-26T08:55:51.424363", "kind": "signal", "msg": "Phase: BEARISH | Signal: SELL | Reason: Breakdown < Low (14800.00) + Phase BEARISH + ATR \u2191"}
+{"timestamp": "2026-03-26T08:55:51.424363", "kind": "order", "msg": "OMS Submit: SELL 1x GOLDPETAL APR FUT-30Apr26 @ ~14785.00"}
+{"timestamp": "2026-03-26T08:55:51.425388", "kind": "fill", "msg": "Simulated Fill: 1x @ 14770.22 (comm: \u20b920.0)"}
+{"timestamp": "2026-03-26T08:55:51.430612", "kind": "info", "msg": "Tick Complete. Open Pos: 1 | Equity: \u20b999,965.21 | uPnL: \u20b9-14.78"}
+{"timestamp": "2026-03-26T08:59:22.866017", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T08:59:23.414583", "kind": "market", "msg": "Fetched 1486 candles via dhan"}
+{"timestamp": "2026-03-26T08:59:23.958042", "kind": "signal", "msg": "Phase: BEARISH | Signal: SELL | Reason: Breakdown < Low (14800.00) + Phase BEARISH + ATR \u2191"}
+{"timestamp": "2026-03-26T08:59:23.959078", "kind": "order", "msg": "OMS Submit: SELL 1x GOLDPETAL APR FUT-30Apr26 @ ~14785.00"}
+{"timestamp": "2026-03-26T08:59:23.959078", "kind": "fill", "msg": "Simulated Fill: 1x @ 14770.22 (comm: \u20b920.0)"}
+{"timestamp": "2026-03-26T08:59:23.965148", "kind": "info", "msg": "Tick Complete. Open Pos: 1 | Equity: \u20b999,965.21 | uPnL: \u20b9-14.78"}
+{"timestamp": "2026-03-26T17:25:33.434016", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T17:25:34.120783", "kind": "market", "msg": "Fetched 1487 candles via dhan"}
+{"timestamp": "2026-03-26T17:25:34.742424", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: Breakdown < Low (14800.00) + Phase BEARISH + ATR \u2191"}
+{"timestamp": "2026-03-26T17:25:34.746977", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-26T17:27:30.188948", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-26T17:27:30.790001", "kind": "market", "msg": "Fetched 1487 candles via dhan"}
+{"timestamp": "2026-03-26T17:27:31.357930", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: Breakdown < Low (14800.00) + Phase BEARISH + ATR \u2191"}
+{"timestamp": "2026-03-26T17:27:31.359964", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-27T01:21:25.764433", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-27T01:21:26.426573", "kind": "market", "msg": "Fetched 1494 candles via dhan"}
+{"timestamp": "2026-03-27T01:21:26.994523", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: Breakdown < Low but filtered: ATR Slope \u2264 0"}
+{"timestamp": "2026-03-27T01:21:26.996533", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-27T11:25:43.251943", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-27T11:25:43.752117", "kind": "market", "msg": "Fetched 1496 candles via dhan"}
+{"timestamp": "2026-03-27T11:25:44.252523", "kind": "signal", "msg": "Phase: SIDEWAYS | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-27T11:25:44.254498", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-30T21:54:00.138024", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-30T21:54:00.367889", "kind": "error", "msg": "Data fetch failed: Dhan API Error: HTTP 401: {\"errorType\":\"Invalid_Authentication\",\"errorCode\":\"DH-901\",\"errorMessage\":\"Client ID or user generated access token is invalid or expired.\"}"}
+{"timestamp": "2026-03-30T21:54:29.484735", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-30T21:54:33.175723", "kind": "market", "msg": "Fetched 1500 candles via dhan"}
+{"timestamp": "2026-03-30T21:54:33.701129", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-30T21:54:33.704142", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-03-31T13:53:40.694127", "kind": "info", "msg": "Starting manual pipeline tick..."}
+{"timestamp": "2026-03-31T13:53:41.084074", "kind": "market", "msg": "Fetched 1170 candles via dhan"}
+{"timestamp": "2026-03-31T13:53:41.526238", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-03-31T13:53:41.529407", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-07T21:19:35.739236", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-07T21:19:35.920002", "kind": "error", "msg": "Data fetch failed: Dhan API Error: HTTP 401: {\"errorType\":\"Invalid_Authentication\",\"errorCode\":\"DH-901\",\"errorMessage\":\"Client ID or user generated access token is invalid or expired.\"}"}
+{"timestamp": "2026-04-07T21:28:28.828852", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-07T21:28:29.225706", "kind": "market", "msg": "Fetched 1302 candles via dhan"}
+{"timestamp": "2026-04-07T21:28:29.681520", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-07T21:28:29.683433", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-07T21:36:14.469432", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-07T21:36:15.017766", "kind": "market", "msg": "Fetched 1302 candles via dhan"}
+{"timestamp": "2026-04-07T21:36:15.458146", "kind": "signal", "msg": "Phase: SIDEWAYS | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-07T21:36:15.460657", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-07T21:40:28.604156", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-07T21:40:29.141462", "kind": "market", "msg": "Fetched 1302 candles via dhan"}
+{"timestamp": "2026-04-07T21:40:29.617129", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-07T21:40:29.618129", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-07T21:48:17.746094", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-07T21:48:18.187430", "kind": "market", "msg": "Fetched 1302 candles via dhan"}
+{"timestamp": "2026-04-07T21:48:18.601403", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-07T21:48:18.601403", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-07T21:54:25.394264", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-07T21:54:25.921276", "kind": "market", "msg": "Fetched 1302 candles via dhan"}
+{"timestamp": "2026-04-07T21:54:26.331202", "kind": "signal", "msg": "Phase: SIDEWAYS | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-07T21:54:26.333197", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-07T21:55:46.808185", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-07T21:55:47.353170", "kind": "market", "msg": "Fetched 1302 candles via dhan"}
+{"timestamp": "2026-04-07T21:55:47.806711", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-07T21:55:47.808515", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-07T22:19:37.309832", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-07T22:19:38.156835", "kind": "market", "msg": "Fetched 1303 candles via dhan"}
+{"timestamp": "2026-04-07T22:19:38.633381", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-07T22:19:38.635380", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-08T10:46:09.457670", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-08T10:46:12.707781", "kind": "market", "msg": "Fetched 1300 candles via dhan"}
+{"timestamp": "2026-04-08T10:46:13.126051", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: Breakout > High but filtered: ATR Slope \u2264 0"}
+{"timestamp": "2026-04-08T10:46:13.126051", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-08T10:51:08.751783", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-08T10:51:09.439885", "kind": "market", "msg": "Fetched 1300 candles via dhan"}
+{"timestamp": "2026-04-08T10:51:09.918586", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: Breakout > High but filtered: ATR Slope \u2264 0"}
+{"timestamp": "2026-04-08T10:51:09.918586", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-08T10:55:44.515175", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-08T10:55:44.968330", "kind": "market", "msg": "Fetched 1300 candles via dhan"}
+{"timestamp": "2026-04-08T10:55:45.444020", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: Breakout > High but filtered: ATR Slope \u2264 0"}
+{"timestamp": "2026-04-08T10:55:45.446886", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-08T10:59:10.304693", "kind": "info", "msg": "Starting manual pipeline tick (Mode: Dhan Realtime)..."}
+{"timestamp": "2026-04-08T10:59:10.846298", "kind": "market", "msg": "Fetched 1300 candles via dhan"}
+{"timestamp": "2026-04-08T10:59:11.292426", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: Breakout > High but filtered: ATR Slope \u2264 0"}
+{"timestamp": "2026-04-08T10:59:11.293402", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-09T11:02:00.422948", "kind": "info", "msg": "Starting manual pipeline tick (Mode: JSON Only)..."}
+{"timestamp": "2026-04-09T11:02:00.422948", "kind": "error", "msg": "Data fetch failed: No Dhan API credentials configured. Cannot execute Dhan feed."}
+{"timestamp": "2026-04-09T11:33:29.475993", "kind": "info", "msg": "Starting manual pipeline tick (Mode: JSON Only)..."}
+{"timestamp": "2026-04-09T11:33:29.800729", "kind": "market", "msg": "Fetched 300 candles via dhan"}
+{"timestamp": "2026-04-09T11:33:30.039878", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: Breakout > High but filtered: ATR Slope \u2264 0"}
+{"timestamp": "2026-04-09T11:33:30.041161", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-09T11:38:12.851947", "kind": "info", "msg": "Starting manual pipeline tick (Mode: JSON Only)..."}
+{"timestamp": "2026-04-09T11:38:13.301641", "kind": "market", "msg": "Fetched 300 candles via dhan"}
+{"timestamp": "2026-04-09T11:38:13.572319", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: Breakout > High but filtered: ATR Slope \u2264 0"}
+{"timestamp": "2026-04-09T11:38:13.576389", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-09T11:48:23.376237", "kind": "info", "msg": "Starting manual pipeline tick (Mode: JSON Only)..."}
+{"timestamp": "2026-04-09T11:48:23.555628", "kind": "market", "msg": "Fetched 300 candles via dhan"}
+{"timestamp": "2026-04-09T11:48:23.755277", "kind": "signal", "msg": "Phase: SIDEWAYS | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-09T11:48:23.756302", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-09T11:57:49.526358", "kind": "info", "msg": "Starting manual pipeline tick (Mode: JSON Only)..."}
+{"timestamp": "2026-04-09T11:57:49.914735", "kind": "market", "msg": "Fetched 300 candles via dhan"}
+{"timestamp": "2026-04-09T11:57:50.238435", "kind": "signal", "msg": "Phase: SIDEWAYS | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-09T11:57:50.239600", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-09T12:03:28.721826", "kind": "info", "msg": "Starting manual pipeline tick (Mode: JSON Only)..."}
+{"timestamp": "2026-04-09T12:03:28.951683", "kind": "market", "msg": "Fetched 300 candles via dhan"}
+{"timestamp": "2026-04-09T12:03:29.349328", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-09T12:03:29.351514", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-09T12:16:11.084240", "kind": "info", "msg": "Starting manual pipeline tick (Mode: JSON Only)..."}
+{"timestamp": "2026-04-09T12:16:11.493563", "kind": "market", "msg": "Fetched 300 candles via dhan"}
+{"timestamp": "2026-04-09T12:16:11.705212", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-09T12:16:11.705212", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-09T12:17:22.690763", "kind": "info", "msg": "Starting manual pipeline tick (Mode: JSON Only)..."}
+{"timestamp": "2026-04-09T12:17:23.038782", "kind": "market", "msg": "Fetched 300 candles via dhan"}
+{"timestamp": "2026-04-09T12:17:23.333967", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-09T12:17:23.333967", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-04-09T13:35:41.359195", "kind": "info", "msg": "Starting manual pipeline tick (Mode: JSON Only)..."}
+{"timestamp": "2026-04-09T13:35:44.750500", "kind": "market", "msg": "Fetched 300 candles via dhan"}
+{"timestamp": "2026-04-09T13:35:44.982498", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-04-09T13:35:44.993633", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}

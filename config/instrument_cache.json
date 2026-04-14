@@ -1,0 +1,705 @@
+{
+  "saved_at": "2026-04-09T11:23:05.376231",
+  "instruments": {
+    "ALUMINI APR FUT-30Apr26": {
+      "security_id": "488789",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ALUMINI AUG FUT-31Aug26": {
+      "security_id": "568829",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ALUMINI JUL FUT-31Jul26": {
+      "security_id": "562046",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ALUMINI JUN FUT-30Jun26": {
+      "security_id": "552707",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ALUMINI MAY FUT-29May26": {
+      "security_id": "510473",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ALUMINIUM APR FUT-30Apr26": {
+      "security_id": "488790",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ALUMINIUM AUG FUT-31Aug26": {
+      "security_id": "568830",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ALUMINIUM JUL FUT-31Jul26": {
+      "security_id": "562047",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ALUMINIUM JUN FUT-30Jun26": {
+      "security_id": "552706",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ALUMINIUM MAY FUT-29May26": {
+      "security_id": "510472",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CARDAMOM APR FUT-30Apr26": {
+      "security_id": "488799",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CARDAMOM AUG FUT-31Aug26": {
+      "security_id": "568841",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CARDAMOM JUL FUT-31Jul26": {
+      "security_id": "562059",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CARDAMOM JUN FUT-30Jun26": {
+      "security_id": "552715",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CARDAMOM MAY FUT-29May26": {
+      "security_id": "510482",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COPPER APR FUT-30Apr26": {
+      "security_id": "488791",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COPPER AUG FUT-31Aug26": {
+      "security_id": "568831",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COPPER JUL FUT-31Jul26": {
+      "security_id": "562048",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COPPER JUN FUT-30Jun26": {
+      "security_id": "552708",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COPPER MAY FUT-29May26": {
+      "security_id": "510480",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COTTON APR FUT-30Apr26": {
+      "security_id": "488800",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COTTON AUG FUT-31Aug26": {
+      "security_id": "568842",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COTTON JUL FUT-31Jul26": {
+      "security_id": "562060",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COTTON JUN FUT-30Jun26": {
+      "security_id": "552716",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COTTON MAY FUT-29May26": {
+      "security_id": "510483",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COTTONOIL APR FUT-30Apr26": {
+      "security_id": "510484",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COTTONOIL JUL FUT-31Jul26": {
+      "security_id": "568843",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COTTONOIL JUN FUT-30Jun26": {
+      "security_id": "562061",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "COTTONOIL MAY FUT-29May26": {
+      "security_id": "552717",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOIL APR FUT-20Apr26": {
+      "security_id": "486502",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOIL AUG FUT-19Aug26": {
+      "security_id": "560977",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOIL JUL FUT-20Jul26": {
+      "security_id": "520702",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOIL JUN FUT-18Jun26": {
+      "security_id": "499095",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOIL MAY FUT-18May26": {
+      "security_id": "488290",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOIL SEP FUT-21Sep26": {
+      "security_id": "565899",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOILM APR FUT-20Apr26": {
+      "security_id": "486503",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOILM AUG FUT-19Aug26": {
+      "security_id": "560978",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOILM JUL FUT-20Jul26": {
+      "security_id": "520703",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOILM JUN FUT-18Jun26": {
+      "security_id": "499096",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOILM MAY FUT-18May26": {
+      "security_id": "488291",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "CRUDEOILM SEP FUT-21Sep26": {
+      "security_id": "565900",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ELECDMBL APR FUT-29Apr26": {
+      "security_id": "510481",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ELECDMBL JUL FUT-30Jul26": {
+      "security_id": "568846",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ELECDMBL JUN FUT-29Jun26": {
+      "security_id": "562063",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ELECDMBL MAY FUT-29May26": {
+      "security_id": "552727",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLD AUG FUT-05Aug26": {
+      "security_id": "466583",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLD DEC FUT-04Dec26": {
+      "security_id": "495213",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLD FEB FUT-05Feb27": {
+      "security_id": "559933",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLD JUN FUT-05Jun26": {
+      "security_id": "459277",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLD OCT FUT-05Oct26": {
+      "security_id": "483079",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDGUINEA APR FUT-30Apr26": {
+      "security_id": "487664",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDGUINEA AUG FUT-31Aug26": {
+      "security_id": "562055",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDGUINEA JUL FUT-31Jul26": {
+      "security_id": "552720",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDGUINEA JUN FUT-30Jun26": {
+      "security_id": "510465",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDGUINEA MAY FUT-29May26": {
+      "security_id": "488785",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDGUINEA SEP FUT-30Sep26": {
+      "security_id": "568838",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDM AUG FUT-05Aug26": {
+      "security_id": "555922",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDM JUL FUT-03Jul26": {
+      "security_id": "510764",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDM JUN FUT-05Jun26": {
+      "security_id": "491727",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDM MAY FUT-05May26": {
+      "security_id": "487819",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDM OCT FUT-05Oct26": {
+      "security_id": "569003",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDM SEP FUT-04Sep26": {
+      "security_id": "563946",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDPETAL APR FUT-30Apr26": {
+      "security_id": "487665",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDPETAL AUG FUT-31Aug26": {
+      "security_id": "562056",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDPETAL JUL FUT-31Jul26": {
+      "security_id": "552721",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDPETAL JUN FUT-30Jun26": {
+      "security_id": "510464",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDPETAL MAY FUT-29May26": {
+      "security_id": "488798",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDPETAL SEP FUT-30Sep26": {
+      "security_id": "568839",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDTEN APR FUT-30Apr26": {
+      "security_id": "487666",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDTEN AUG FUT-31Aug26": {
+      "security_id": "562057",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDTEN JUL FUT-31Jul26": {
+      "security_id": "552722",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDTEN JUN FUT-30Jun26": {
+      "security_id": "510463",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDTEN MAY FUT-29May26": {
+      "security_id": "488787",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLDTEN SEP FUT-30Sep26": {
+      "security_id": "568840",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "KAPAS APR FUT-30Apr26": {
+      "security_id": "452854",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "KAPAS APR FUT-30Apr27": {
+      "security_id": "568844",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "KAPAS FEB FUT-26Feb27": {
+      "security_id": "552718",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "KAPAS NOV FUT-30Nov26": {
+      "security_id": "487669",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEAD APR FUT-30Apr26": {
+      "security_id": "488792",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEAD AUG FUT-31Aug26": {
+      "security_id": "568833",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEAD JUL FUT-31Jul26": {
+      "security_id": "562049",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEAD JUN FUT-30Jun26": {
+      "security_id": "552709",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEAD MAY FUT-29May26": {
+      "security_id": "510476",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEADMINI APR FUT-30Apr26": {
+      "security_id": "488793",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEADMINI AUG FUT-31Aug26": {
+      "security_id": "568832",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEADMINI JUL FUT-31Jul26": {
+      "security_id": "562050",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEADMINI JUN FUT-30Jun26": {
+      "security_id": "552710",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "LEADMINI MAY FUT-29May26": {
+      "security_id": "510477",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "MENTHAOIL APR FUT-30Apr26": {
+      "security_id": "487670",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "MENTHAOIL AUG FUT-31Aug26": {
+      "security_id": "562062",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "MENTHAOIL JUL FUT-31Jul26": {
+      "security_id": "552719",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "MENTHAOIL JUN FUT-30Jun26": {
+      "security_id": "510485",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "MENTHAOIL MAY FUT-29May26": {
+      "security_id": "488802",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "MENTHAOIL SEP FUT-30Sep26": {
+      "security_id": "568845",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGAS APR FUT-27Apr26": {
+      "security_id": "487465",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGAS AUG FUT-26Aug26": {
+      "security_id": "561496",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGAS JUL FUT-28Jul26": {
+      "security_id": "538685",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGAS JUN FUT-25Jun26": {
+      "security_id": "504265",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGAS MAY FUT-26May26": {
+      "security_id": "488505",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGAS SEP FUT-25Sep26": {
+      "security_id": "568245",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGASM APR FUT-27Apr26": {
+      "security_id": "487466",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGASM AUG FUT-26Aug26": {
+      "security_id": "561497",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGASM JUL FUT-28Jul26": {
+      "security_id": "538686",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGASM JUN FUT-25Jun26": {
+      "security_id": "504266",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGASM MAY FUT-26May26": {
+      "security_id": "488506",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NATURALGASM SEP FUT-25Sep26": {
+      "security_id": "568246",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NICKEL APR FUT-15Apr26": {
+      "security_id": "488796",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NICKEL AUG FUT-19Aug26": {
+      "security_id": "568837",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NICKEL JUL FUT-15Jul26": {
+      "security_id": "562051",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NICKEL JUN FUT-17Jun26": {
+      "security_id": "552714",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "NICKEL MAY FUT-20May26": {
+      "security_id": "510474",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVER DEC FUT-04Dec26": {
+      "security_id": "495214",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVER JUL FUT-03Jul26": {
+      "security_id": "464150",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVER MAR FUT-05Mar27": {
+      "security_id": "564619",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVER MAY FUT-05May26": {
+      "security_id": "457532",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVER SEP FUT-04Sep26": {
+      "security_id": "471725",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVERM APR FUT-30Apr26": {
+      "security_id": "457533",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVERM AUG FUT-31Aug26": {
+      "security_id": "471726",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVERM FEB FUT-26Feb27": {
+      "security_id": "564620",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVERM JUN FUT-30Jun26": {
+      "security_id": "464151",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVERM NOV FUT-30Nov26": {
+      "security_id": "483080",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVERMIC APR FUT-30Apr26": {
+      "security_id": "466029",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVERMIC AUG FUT-31Aug26": {
+      "security_id": "488788",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVERMIC JUN FUT-30Jun26": {
+      "security_id": "477177",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "SILVERMIC NOV FUT-30Nov26": {
+      "security_id": "562058",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "STEELREBAR APR FUT-30Apr26": {
+      "security_id": "488797",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "STEELREBAR AUG FUT-31Aug26": {
+      "security_id": "568834",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "STEELREBAR JUL FUT-31Jul26": {
+      "security_id": "562052",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "STEELREBAR JUN FUT-30Jun26": {
+      "security_id": "552713",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "STEELREBAR MAY FUT-29May26": {
+      "security_id": "510475",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINC APR FUT-30Apr26": {
+      "security_id": "488794",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINC AUG FUT-31Aug26": {
+      "security_id": "568836",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINC JUL FUT-31Jul26": {
+      "security_id": "562053",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINC JUN FUT-30Jun26": {
+      "security_id": "552711",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINC MAY FUT-29May26": {
+      "security_id": "510478",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINCMINI APR FUT-30Apr26": {
+      "security_id": "488795",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINCMINI AUG FUT-31Aug26": {
+      "security_id": "568835",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINCMINI JUL FUT-31Jul26": {
+      "security_id": "562054",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINCMINI JUN FUT-30Jun26": {
+      "security_id": "552712",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "ZINCMINI MAY FUT-29May26": {
+      "security_id": "510479",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    }
+  }
+}
