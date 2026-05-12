@@ -1,5 +1,5 @@
 {
-  "saved_at": "2026-04-09T11:23:05.376231",
+  "saved_at": "2026-04-18T04:55:25.670538",
   "instruments": {
     "ALUMINI APR FUT-30Apr26": {
       "security_id": "488789",
@@ -223,6 +223,11 @@
     },
     "ELECDMBL MAY FUT-29May26": {
       "security_id": "552727",
+      "exchange_segment": "MCX_COMM",
+      "instrument_type": "FUTCOM"
+    },
+    "GOLD APR FUT-05Apr27": {
+      "security_id": "569424",
       "exchange_segment": "MCX_COMM",
       "instrument_type": "FUTCOM"
     },
@@ -528,11 +533,6 @@
     },
     "NATURALGASM SEP FUT-25Sep26": {
       "security_id": "568246",
-      "exchange_segment": "MCX_COMM",
-      "instrument_type": "FUTCOM"
-    },
-    "NICKEL APR FUT-15Apr26": {
-      "security_id": "488796",
       "exchange_segment": "MCX_COMM",
       "instrument_type": "FUTCOM"
     },
