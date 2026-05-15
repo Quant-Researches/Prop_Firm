@@ -174,3 +174,9 @@
 {"timestamp": "2026-04-09T13:35:44.750500", "kind": "market", "msg": "Fetched 300 candles via dhan"}
 {"timestamp": "2026-04-09T13:35:44.982498", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
 {"timestamp": "2026-04-09T13:35:44.993633", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: \u20b9100,000.00 | uPnL: \u20b90.00"}
+{"timestamp": "2026-05-14T09:32:04.875007", "kind": "info", "msg": "Starting manual pipeline tick (Mode: MetaTrader5)..."}
+{"timestamp": "2026-05-14T09:32:04.875972", "kind": "error", "msg": "HARD STOP: Max Overall Loss violated! Equity (10000.00) <= Limit (90000.00)"}
+{"timestamp": "2026-05-15T16:01:09.014072", "kind": "info", "msg": "Starting manual pipeline tick (Mode: MetaTrader5)..."}
+{"timestamp": "2026-05-15T16:01:09.045469", "kind": "market", "msg": "Fetched 300 candles via mt5"}
+{"timestamp": "2026-05-15T16:01:09.148119", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-05-15T16:01:09.150877", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: 100,000.00 | uPnL: 0.00"}

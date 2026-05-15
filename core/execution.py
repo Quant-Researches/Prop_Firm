@@ -95,12 +95,12 @@ class ExecutionEngine:
     def execute(self, order: OrderEvent, prefs: dict = None) -> FillEvent:
         """
         Execute an order and return a FillEvent.
-        Routes to Live Dhan API or Simulation based on mode.
+        Routes to MT5 or Simulation based on mode.
         """
-        if self.mode == "Dhan Realtime":
-            return self._execute_dhan(order, prefs)
+        if self.mode == "MetaTrader5":
+            return self._execute_mt5(order, prefs)
         return self._execute_sim(order)
-        
+
     def _execute_sim(self, order: OrderEvent) -> FillEvent:
         # Simulated fill price
         base_price = order.limit_price if order.limit_price else 100.0  # fallback
@@ -127,70 +127,56 @@ class ExecutionEngine:
         return fill
 
 
-    def _execute_dhan(self, order: OrderEvent, prefs: dict) -> FillEvent:
-        if not prefs:
-            raise ValueError("Preferences containing API keys required for Dhan Realtime execution.")
-            
-        client_id = prefs.get("dhan_client_id")
-        access_token = prefs.get("dhan_api_key")
+    def _execute_mt5(self, order: OrderEvent, prefs: dict) -> FillEvent:
+        import MetaTrader5 as mt5
         
-        url = "https://api.dhan.co/v2/orders"
-        headers = {
-            "access-token": access_token,
-            "client-id": client_id,
-            "Content-Type": "application/json"
+        # Determine lot size
+        volume = float(order.qty)
+        
+        # MT5 Order Types
+        order_type = mt5.ORDER_TYPE_BUY if order.side.upper() == "BUY" else mt5.ORDER_TYPE_SELL
+        
+        # Tick for current price
+        tick = mt5.symbol_info_tick(order.symbol)
+        if not tick:
+            raise RuntimeError(f"MT5 API: Could not get tick for {order.symbol}")
+            
+        price = tick.ask if order.side.upper() == "BUY" else tick.bid
+        
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": order.symbol,
+            "volume": volume,
+            "type": order_type,
+            "price": price,
+            "sl": float(order.stop_loss) if order.stop_loss else 0.0,
+            "tp": float(order.take_profit) if order.take_profit else 0.0,
+            "deviation": 20,
+            "magic": 234000,
+            "comment": "Trade Pulse",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
         }
         
-        # Dhan payload configuration
-        exchange_segment = prefs.get("exchange_segment", "MCX_COMM")
-        security_id = prefs.get("security_id", "")
+        result = mt5.order_send(request)
         
-        payload = {
-            "dhanClientId": client_id,
-            "correlationId": order.order_id,
-            "transactionType": order.side.upper(),
-            "exchangeSegment": exchange_segment,
-            "productType": "INTRADAY",
-            "orderType": "MARKET",
-            "validity": "DAY",
-            "securityId": str(security_id),
-            "quantity": int(order.qty),
-            "disclosedQuantity": 0,
-            "price": 0,
-            "triggerPrice": 0,
-            "afterMarketOrder": False,
-            "boProfitValue": 0,
-            "boStopLossValue": 0,
-            "drvExpiryDate": None,
-            "drvOptionType": None,
-            "drvStrikePrice": 0
-        }
-        
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=10)
-            data = response.json()
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            err = f"MT5 Order Send Failed, retcode: {result.retcode}, comment: {result.comment}"
+            raise RuntimeError(err)
             
-            # Parse responses
-            broker_order_id = data.get("orderId", "UNKNOWN_DHAN_ID")
-            status = data.get("orderStatus", "SUBMITTED")
-            
-            # Simulated instant market fill parsing 
-            fill = FillEvent(
-                order_id=order.order_id,
-                symbol=order.symbol,
-                side=order.side,
-                qty=order.qty,
-                fill_price=order.limit_price if order.limit_price else 100.0, # Estimated fill until full websocket sync
-                commission=order.qty * self.commission_per_lot,
-                slippage=0.0,
-                mode=self.mode,
-                metadata={"dhan_order_id": broker_order_id, "api_response": data, "api_status": status}
-            )
-            self._fills.append(fill)
-            return fill
-            
-        except Exception as e:
-            raise RuntimeError(f"Dhan API Order Error: {e}")
+        fill = FillEvent(
+            order_id=order.order_id,
+            symbol=order.symbol,
+            side=order.side,
+            qty=result.volume,
+            fill_price=result.price,
+            commission=0.0, # MT5 doesn't easily return commission in order_send, can be queried from deals later
+            slippage=abs(result.price - price),
+            mode=self.mode,
+            metadata={"mt5_order": result.order, "mt5_deal": result.deal, "comment": result.comment}
+        )
+        self._fills.append(fill)
+        return fill
 
     # ------------------------------------------------------------------
     # Helpers

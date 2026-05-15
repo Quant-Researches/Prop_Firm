@@ -145,7 +145,7 @@ class RealTimeSignalGenerator:
     def __init__(self, stock_symbol, sec_id=None, interval="5m", capital_per_stock=10000,
                  use_vol_filter=True, ema_fast=3, ema_slow=8, use_atr_filter=True, atr_period=14):
         self.symbol = stock_symbol
-        self.sec_id = sec_id  # Dhan Security ID (Optional for scanner)
+        self.sec_id = sec_id  # MT5 Symbol (Optional for scanner)
         self.capital = capital_per_stock
         self.interval = interval
         self.data = pd.DataFrame()

@@ -432,19 +432,18 @@ def _init_state():
         "ema_slow":        _USER_PREFS.get("ema_slow", 8),
         "use_vol_filter":  _USER_PREFS.get("use_vol_filter", True),
         "use_atr_filter":  _USER_PREFS.get("use_atr_filter", True),
-        "trade_volume":    _USER_PREFS.get("trade_volume", 1),
-        "trading_symbol":  _USER_PREFS.get("trading_symbol", "Gold Petal (1g)"),
-        "security_id":     _USER_PREFS.get("security_id", "626"),
-        "dhan_client_id":  _USER_PREFS.get("dhan_client_id", ""),
-        "dhan_api_key":    _USER_PREFS.get("dhan_api_key", ""),
-        "account_balance": float(_USER_PREFS.get("account_balance", 100_000.0)),
-        "sod_balance":     float(_USER_PREFS.get("account_balance", 100_000.0)),
-        "margin_cap":      int(_USER_PREFS.get("margin_cap", 80)),
+        "trade_volume":    _USER_PREFS.get("trade_volume", 0.01),
+        "trading_symbol":  _USER_PREFS.get("trading_symbol", "XAUUSD"),
+        "mt5_account":     _USER_PREFS.get("mt5_account", ""),
+        "mt5_password":    _USER_PREFS.get("mt5_password", ""),
+        "mt5_server":      _USER_PREFS.get("mt5_server", "FTMO-Demo"),
+        "account_balance": float(_USER_PREFS.get("ftmo_initial_balance", 100_000.0)),
+        "sod_balance":     float(_USER_PREFS.get("ftmo_sod_balance", 100_000.0)),
         "alert_telegram":  bool(_USER_PREFS.get("alert_telegram", True)),
         "alert_email":     bool(_USER_PREFS.get("alert_email", True)),
         "alert_sound":     bool(_USER_PREFS.get("alert_sound", True)),
         "alert_desktop":   bool(_USER_PREFS.get("alert_desktop", True)),
-        "execution_mode":  _USER_PREFS.get("execution_mode", "JSON Only"),
+        "execution_mode":  _USER_PREFS.get("execution_mode", "MetaTrader5"),
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -500,18 +499,12 @@ def _load_live_state():
         st.session_state.open_positions = 0
         st.session_state.total_trades = 0
 
-    # 1b. FETCH REAL-TIME BALANCE FROM DHAN (if active)
-    _cid = st.session_state.get("dhan_client_id")
-    _tok = st.session_state.get("dhan_api_key")
-    if _cid and _tok and st.session_state.get("data_source") == "Dhan":
-        from core.risk_manager import RiskManager
-        f_data = RiskManager.fetch_fund_limits(_cid, _tok)
-        if f_data:
-            # Current available cash
-            st.session_state.account_balance = float(f_data.get("availabelBalance", st.session_state.account_balance))
-            # Start of Day limit for growth metric
-            if "sodLimit" in f_data:
-                st.session_state.sod_balance = float(f_data["sodLimit"])
+    # 1b. FETCH REAL-TIME BALANCE FROM MT5 (if active)
+    import MetaTrader5 as mt5
+    if mt5.terminal_info():
+        acc = mt5.account_info()
+        if acc:
+            st.session_state.account_balance = acc.equity
 
     # 2. Load recent events (max 60 most recent)
     log_lines = []

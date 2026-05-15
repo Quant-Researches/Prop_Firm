@@ -33,24 +33,35 @@ def main_loop():
         # Only check once per minute
         if last_run_minute != current_minute:
             
-            # --- Auto Token Generation via TOTP at Midnight ---
-            if current_time == "00:00":
+            # --- Auto MT5 Reconnection & Snapshot at Configured Reset Time ---
+            p = Path("config/user_prefs.json")
+            prefs = {}
+            if p.exists():
                 try:
-                    from core.dhan_auth import DhanAutoLogin
-                    p = Path("config/user_prefs.json")
-                    if p.exists():
-                        prefs = json.loads(p.read_text(encoding="utf-8"))
-                        c_id = prefs.get("dhan_client_id")
-                        c_pin = prefs.get("dhan_pin")
-                        c_totp = prefs.get("totp_secret")
-                        
-                        if c_id and c_pin and c_totp:
-                            engine.storage.log_event("info", "Executing scheduled 00:00 Dhan API Token generation via TOTP...")
-                            DhanAutoLogin.generate_and_save_token(c_id, c_pin, c_totp, str(p))
-                            engine.storage.log_event("info", "Dhan access token generated and saved successfully.")
+                    prefs = json.loads(p.read_text(encoding="utf-8"))
+                except:
+                    pass
+            
+            reset_time = prefs.get("daily_reset_time", "00:00")
+            
+            if current_time == reset_time:
+                try:
+                    from core.mt5_connection import MT5Connection
+                    acc = prefs.get("mt5_account")
+                    pwd = prefs.get("mt5_password")
+                    svr = prefs.get("mt5_server")
+                    if acc and pwd and svr:
+                        engine.storage.log_event("info", f"Executing scheduled {reset_time} MT5 Reconnection & Snapshot...")
+                        if MT5Connection.connect(int(acc), pwd, svr):
+                            import MetaTrader5 as mt5
+                            acc_info = mt5.account_info()
+                            if acc_info:
+                                prefs["ftmo_sod_balance"] = float(acc_info.balance)
+                                p.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+                                engine.storage.log_event("info", f"✅ Snapshot: Updated Start of Day Balance to {acc_info.balance}")
                 except Exception as e:
-                    engine.storage.log_event("error", f"Scheduled token generation failed: {e}")
-                    print(f"Error in scheduled TOTP token generation: {e}")
+                    engine.storage.log_event("error", f"Scheduled MT5 task failed: {e}")
+                    print(f"Error in scheduled MT5 task: {e}")
             # --------------------------------------------------
 
             scheds = load_schedules()
