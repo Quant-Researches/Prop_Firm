@@ -17,5 +17,9 @@
   "telegram_chat_id": "",
   "gmail_sender": "",
   "gmail_app_password": "",
-  "gmail_receiver": ""
+  "gmail_receiver": "",
+  "alert_telegram": true,
+  "alert_email": true,
+  "alert_sound": true,
+  "alert_desktop": true
 }

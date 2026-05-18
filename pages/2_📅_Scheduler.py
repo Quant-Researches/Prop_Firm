@@ -586,6 +586,55 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SECTION 4.5 — AUTOMATIC FTMO ACTIVE HOURS GENERATOR
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown('<div class="section-label">⚡ Automatic FTMO Active Hours Generator</div>', unsafe_allow_html=True)
+
+with st.container():
+    st.markdown("""
+    <div style="background:linear-gradient(135deg, #1e1b4b 0%, #0d1225 100%); border:1px solid #4f46e5; border-radius:14px; padding:20px; margin-bottom:20px;">
+        <div style="font-weight:700; color:#818cf8; font-size:1rem; margin-bottom:8px;">🔥 Active Hours Auto-Scheduler</div>
+        <div style="font-size:0.8rem; color:#94a3b8; line-height:1.6; margin-bottom:16px;">
+            Automatically configure the entire weekly schedule to align with standard <strong>FTMO trading session hours</strong> for your active trading instrument. 
+            All other custom schedules will be completely removed, and a new optimal grid aligned with your settings will be loaded.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col_g1, col_g2, col_g3 = st.columns([1.5, 1.5, 1.2])
+    
+    active_symbol = st.session_state.get("trading_symbol", "XAUUSD")
+    active_timeframe = st.session_state.get("timeframe", "5m")
+    
+    with col_g1:
+        st.markdown(f"<div style='font-size:0.75rem;color:#64748b;'>Trading Instrument</div><div style='font-weight:600;font-size:1.1rem;color:#f8fafc;padding:4px 0;'>💎 {active_symbol}</div>", unsafe_allow_html=True)
+    with col_g2:
+        st.markdown(f"<div style='font-size:0.75rem;color:#64748b;'>Selected Interval</div><div style='font-weight:600;font-size:1.1rem;color:#38bdf8;padding:4px 0;'>⏱️ {active_timeframe}</div>", unsafe_allow_html=True)
+    with col_g3:
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        generate_btn = st.button("🔥 Auto-Generate Grid", use_container_width=True, type="primary")
+        
+    if generate_btn:
+        from core.scheduler_helper import update_and_save_schedule
+        import json
+        from pathlib import Path
+        p_file = Path("config/user_prefs.json")
+        prefs_payload = json.loads(p_file.read_text(encoding="utf-8")) if p_file.exists() else {}
+        
+        with st.spinner("⚡ Rebuilding FTMO schedule..."):
+            count, msg = update_and_save_schedule(active_symbol, active_timeframe, prefs=prefs_payload)
+            if count > 0:
+                st.session_state.schedules = _load_schedules()
+                st.toast(f"✅ Generated {count} active hours slots for {active_symbol}!", icon="⚡")
+                st.success(f"🎉 **Success!** Automatically generated {count} FTMO-compliant trading slots aligned to standard market sessions. All previous schedules have been cleared.")
+                st.rerun()
+            else:
+                st.error(f"❌ Failed to generate schedule: {msg}")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # SECTION 5 — QUICK PRESETS
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown('<div class="section-label">⚡ Quick Presets</div>', unsafe_allow_html=True)

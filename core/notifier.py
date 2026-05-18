@@ -209,6 +209,7 @@ def _format_risk_telegram_message(alert_type: str, symbol: str, warnings: list,
         "NEWS_BLACKOUT": "NEWS BLACKOUT",
         "FTMO_WARNING":  "FTMO WARNING",
         "WARNING":       "RISK ALERT",
+        "INFO":          "SYSTEM UPDATE",
     }
     header = icons.get(alert_type, "RISK ALERT")
 
