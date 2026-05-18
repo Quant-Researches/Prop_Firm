@@ -374,7 +374,8 @@ def init_session_state():
             pass
 
     # Attempt to read live equity from MT5 on first load
-    _live_balance = float(user_prefs.get("ftmo_sod_balance", 100_000.0))
+    _init_bal = float(user_prefs.get("initial_balance", user_prefs.get("ftmo_sod_balance", 10_000.0)))
+    _live_balance = _init_bal
     try:
         import MetaTrader5 as _mt5
         if _mt5.terminal_info() is not None:
@@ -403,13 +404,14 @@ def init_session_state():
         "use_vol_filter":  user_prefs.get("use_vol_filter", True),
         "use_atr_filter":  user_prefs.get("use_atr_filter", True),
         "trade_volume":    user_prefs.get("trade_volume", 0.01),
+        "initial_balance": float(user_prefs.get("initial_balance", 10_000.0)),
         "trading_symbol":  user_prefs.get("trading_symbol", "XAUUSD"),
         "mt5_account":     user_prefs.get("mt5_account", ""),
         "mt5_password":    user_prefs.get("mt5_password", ""),
         "mt5_server":      user_prefs.get("mt5_server", "FTMO-Demo"),
         "mt5_path":        user_prefs.get("mt5_path", ""),
         "bar_count":       user_prefs.get("bar_count", 300),
-        "sod_balance":     float(user_prefs.get("ftmo_sod_balance", 100_000.0)),
+        "sod_balance":     float(user_prefs.get("ftmo_sod_balance", user_prefs.get("initial_balance", 10_000.0))),
         "telegram_bot_token": user_prefs.get("telegram_bot_token", ""),
         "telegram_chat_id":  user_prefs.get("telegram_chat_id", ""),
         "gmail_sender":      user_prefs.get("gmail_sender", ""),

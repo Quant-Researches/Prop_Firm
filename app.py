@@ -333,7 +333,8 @@ with m3:
     </div>""", unsafe_allow_html=True)
 
 with m4:
-    start_val = st.session_state.get("sod_balance", 100_000.0)
+    _init_bal = float(_PREFS_FILE.exists() and json.loads(_PREFS_FILE.read_text()).get("initial_balance", 10_000.0) or 10_000.0)
+    start_val = st.session_state.get("sod_balance", _init_bal)
     bal_delta = st.session_state.account_balance - start_val
     bd_color  = "delta-pos" if bal_delta >= 0 else "delta-neg"
     bd_sign   = "+" if bal_delta >= 0 else ""
@@ -392,7 +393,8 @@ with cfg_col:
 
     _eq   = st.session_state.account_balance
     _pnl  = st.session_state.daily_pnl
-    _sod  = st.session_state.get("sod_balance", _prefs.get("ftmo_sod_balance", _eq))
+    _init = float(_prefs.get("initial_balance", 10_000.0))
+    _sod  = st.session_state.get("sod_balance", float(_prefs.get("ftmo_sod_balance", _init)))
     _dd   = ((_sod - _eq) / _sod * 100) if _sod > 0 else 0.0
     _dd_color = "#ef4444" if _dd > 3 else "#fbbf24" if _dd > 1 else "#10b981"
 

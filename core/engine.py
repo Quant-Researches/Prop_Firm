@@ -151,7 +151,9 @@ class TradingEngine:
             atr      = df['ATR'].iloc[-1] if 'ATR' in df.columns else (close_px * 0.005)
 
             # ── Sync starting balance from SOD snapshot ────────────────────
-            sod_balance = float(prefs.get("ftmo_sod_balance", 10_000.0))
+            # Use initial_balance from settings as the SOD fallback — never hardcode
+            _init_balance = float(prefs.get("initial_balance", 10_000.0))
+            sod_balance = float(prefs.get("ftmo_sod_balance", _init_balance))
             self.risk_manager.update_starting_balance(sod_balance)
 
             # Fetch live account state from MT5

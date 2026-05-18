@@ -115,6 +115,7 @@ DEFAULT_PREFS = {
     "use_atr_filter":    True,
     "trade_volume":      0.01,
     "bar_count":         300,
+    "initial_balance":   10_000.0,
     "mt5_account":       "",
     "mt5_password":      "",
     "mt5_server":        "FTMO-Demo",
@@ -194,8 +195,24 @@ with st.form("settings_form", border=False):
     timeframe = c5.selectbox("Timeframe", tf_opts, index=tf_opts.index(tf_val) if tf_val in tf_opts else 1, help="Candle resolution used for strategy signals.")
     
     trade_volume = c6.number_input("Trade Volume (Lots)", value=float(st.session_state.get("trade_volume", 0.01)), step=0.01, format="%.2f", help="Lot size for automated trades.")
-    
+
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+    cb1, cb2 = st.columns(2)
+    initial_balance = cb1.number_input(
+        "Initial Account Balance ($)",
+        min_value=100.0,
+        max_value=10_000_000.0,
+        value=float(st.session_state.get("initial_balance", 10_000.0)),
+        step=1000.0,
+        format="%.2f",
+        help="Your FTMO challenge or funded account starting balance. Used for drawdown calculations and SOD snapshots."
+    )
+    cb2.markdown(f"""
+    <div style='margin-top:28px; padding:10px 16px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px;'>
+        <span style='color:#64748b; font-size:0.78rem;'>Configured Starting Balance:</span><br>
+        <span style='color:#34d399; font-family:"JetBrains Mono",monospace; font-size:1.2rem; font-weight:800;'>${initial_balance:,.2f}</span>
+    </div>""", unsafe_allow_html=True)
+
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Strategy Params ──
@@ -273,6 +290,7 @@ with st.form("settings_form", border=False):
             "trading_symbol": trading_symbol.strip(),
             "timeframe": timeframe,
             "trade_volume": float(trade_volume),
+            "initial_balance": float(initial_balance),
             "ema_fast": int(ema_fast),
             "ema_slow": int(ema_slow),
             "use_vol_filter": use_vol_filter,
@@ -286,6 +304,10 @@ with st.form("settings_form", border=False):
             "gmail_app_password": gmail_app_password.strip(),
             "gmail_receiver": gmail_receiver.strip(),
         }
+        # Preserve existing ftmo_sod_balance — only update initial_balance
+        existing = _load_prefs()
+        if "ftmo_sod_balance" in existing:
+            new_prefs["ftmo_sod_balance"] = existing["ftmo_sod_balance"]
         for k, v in new_prefs.items():
             st.session_state[k] = v
         _save_prefs(new_prefs)
