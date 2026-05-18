@@ -10,6 +10,13 @@ class MT5Connection:
         Initializes MetaTrader 5 and logs in with the given credentials.
         Returns True if successful, False otherwise.
         """
+        # Check if already initialized and connected to the correct account
+        term_info = mt5.terminal_info()
+        if term_info is not None:
+            acc_info = mt5.account_info()
+            if acc_info and str(acc_info.login) == str(account):
+                return True
+                
         init_kwargs = {}
         if path:
             init_kwargs["path"] = path
