@@ -289,4 +289,22 @@ with st.form("settings_form", border=False):
         for k, v in new_prefs.items():
             st.session_state[k] = v
         _save_prefs(new_prefs)
-        st.success("✅ **Settings saved successfully!** Changes will apply to your next scheduled run.")
+
+        # Auto schedule generation for XAUUSD matching FTMO hours
+        if trading_symbol.strip().upper() == "XAUUSD":
+            from core.scheduler_helper import update_and_save_schedule
+            count, msg = update_and_save_schedule("XAUUSD", timeframe, prefs=new_prefs)
+            if count > 0:
+                st.success(f"✅ **Settings saved & XAUUSD Schedule Generated!** Created {count} active slots matching FTMO active hours. Old schedules were automatically purged.")
+                # Sync session state schedules if present
+                if "schedules" in st.session_state:
+                    try:
+                        p = Path("schedules.json")
+                        if p.exists():
+                            st.session_state.schedules = json.loads(p.read_text(encoding="utf-8"))
+                    except Exception:
+                        pass
+            else:
+                st.error(f"❌ Failed to automatically generate schedule: {msg}")
+        else:
+            st.success("✅ **Settings saved successfully!** Changes will apply to your next scheduled run.")
