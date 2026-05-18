@@ -1,6 +1,7 @@
 import time
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from core.engine import TradingEngine
@@ -15,19 +16,21 @@ def load_schedules():
     return []
 
 # Initialize the shared engine
-engine = TradingEngine(mode="paper")
+engine = TradingEngine(mode="live")
 
 def main_loop():
-    print("Trade Pulse Quants: Background Execution Engine (Paper Mode)")
+    print("Trade Pulse Quants: Background Execution Engine (Live Mode)")
     print("Press Ctrl+C to exit. Logs are written to data/events.jsonl")
-    engine.storage.log_event("info", "Background Execution Engine Started (Paper Mode).")
+    engine.storage.log_event("info", "Background Execution Engine Started (Live Mode).")
     
     last_run_minute = None
     
     while True:
-        now = datetime.now()
-        current_day = now.strftime("%A")
-        current_time = now.strftime("%H:%M")
+        # Daily reset uses Prague time (CE(S)T = GMT+2 in summer)
+        # 00:00 Prague (CEST) = 01:00 MT5 chart (GMT+3) = 03:30 IST
+        now = datetime.now(ZoneInfo("Europe/Prague"))
+        current_day    = now.strftime("%A")
+        current_time   = now.strftime("%H:%M")
         current_minute = now.strftime("%Y-%m-%d %H:%M")
         
         # Only check once per minute
@@ -58,10 +61,27 @@ def main_loop():
                             if acc_info:
                                 prefs["ftmo_sod_balance"] = float(acc_info.balance)
                                 p.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
-                                engine.storage.log_event("info", f"✅ Snapshot: Updated Start of Day Balance to {acc_info.balance}")
+                                engine.storage.log_event(
+                                    "info",
+                                    f"SOD Snapshot: Balance={acc_info.balance} "
+                                    f"| Prague={now.strftime('%H:%M')} (reset time) "
+                                    f"| MT5={reset_time} +1h | IST ~03:30"
+                                )
                 except Exception as e:
                     engine.storage.log_event("error", f"Scheduled MT5 task failed: {e}")
                     print(f"Error in scheduled MT5 task: {e}")
+                    try:
+                        from core.notifier import broadcast_risk_alert
+                        broadcast_risk_alert(
+                            alert_type="BLOCKED",
+                            symbol=prefs.get("trading_symbol", "UNKNOWN"),
+                            warnings=[f"DAILY RESET / MT5 RECONNECT FAILED: {e}"],
+                            suggestions=["SOD balance snapshot was NOT saved. Check MT5 credentials and restart the bot."],
+                            prefs=prefs,
+                            block_reason=str(e),
+                        )
+                    except Exception:
+                        pass
             # --------------------------------------------------
 
             scheds = load_schedules()
@@ -91,8 +111,21 @@ def main_loop():
                         bg_thread.start()
 
                 except Exception as e:
-                    engine.storage.log_event("info", f"Pipeline crash: {str(e)}")
+                    engine.storage.log_event("error", f"Pipeline crash: {str(e)}")
                     print(f"Error in pipeline tick: {e}")
+                    try:
+                        from core.notifier import broadcast_risk_alert
+                        _crash_prefs = json.loads(Path("config/user_prefs.json").read_text(encoding="utf-8")) if Path("config/user_prefs.json").exists() else {}
+                        broadcast_risk_alert(
+                            alert_type="BLOCKED",
+                            symbol=_crash_prefs.get("trading_symbol", "UNKNOWN"),
+                            warnings=[f"SCHEDULER PIPELINE CRASH: {str(e)}"],
+                            suggestions=["Last scheduled tick FAILED. Bot is still running but trade was not executed. Check logs."],
+                            prefs=_crash_prefs,
+                            block_reason=str(e),
+                        )
+                    except Exception:
+                        pass
                 finally:
                     last_run_minute = current_minute
                     

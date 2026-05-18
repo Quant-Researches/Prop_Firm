@@ -25,33 +25,10 @@ st.set_page_config(
 SCHEDULES_FILE = Path(__file__).parent.parent / "schedules.json"
 
 # ── CSS ────────────────────────────────────────────────────────────────────────
+from Utilities.ui_components import load_css, render_sidebar, init_session_state
+load_css()
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-.stApp { background: #0a0e1a; color: #e2e8f0; }
-[data-testid="stSidebar"] { background: linear-gradient(180deg, #0d1225, #111827); border-right: 1px solid #1e293b; }
-[data-testid="stSidebar"] * { color: #cbd5e1 !important; }
-
-.tpq-header {
-    background: linear-gradient(135deg, #0f172a 0%, #1a0f3e 50%, #0f172a 100%);
-    border: 1px solid #4f46e5;
-    border-radius: 16px; padding: 22px 32px; margin-bottom: 24px;
-    box-shadow: 0 0 40px rgba(99,102,241,0.12);
-    display: flex; align-items: center; justify-content: space-between;
-}
-.tpq-title { font-size: 1.8rem; font-weight: 800;
-    background: linear-gradient(90deg, #818cf8, #c084fc, #38bdf8);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.tpq-subtitle { font-size: 0.82rem; color: #64748b; margin-top: 4px; }
-.tpq-badge {
-    background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.35);
-    border-radius: 10px; padding: 10px 18px; text-align: center;
-}
-.tpq-badge-num { font-size: 1.6rem; font-weight: 700; color: #818cf8; }
-.tpq-badge-lbl { font-size: 0.68rem; color: #475569; text-transform: uppercase; letter-spacing: 1px; }
-
 /* Day column card */
 .day-card {
     background: linear-gradient(135deg, #0d1225, #111827);
@@ -103,53 +80,16 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 
-/* Section label */
-.section-label {
-    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px;
-    color: #475569; margin-bottom: 12px;
-    display: flex; align-items: center; gap: 8px;
-}
-.section-label::after { content: ''; flex: 1; height: 1px; background: #1e293b; }
-
 /* Copy panel */
 .copy-panel {
     background: linear-gradient(135deg, #0f1629, #131f35);
     border: 1px solid #1e3a5f; border-radius: 14px; padding: 18px 20px;
 }
 
-/* Buttons */
-.stButton > button {
-    border-radius: 10px !important; font-weight: 600 !important;
-    font-family: 'Inter', sans-serif !important; border: none !important;
-    transition: all 0.25s !important;
-}
-.stButton > button:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.4) !important; }
-
-/* Table */
-.stDataFrame { border-radius: 10px !important; border: 1px solid #1e293b !important; }
-
 /* Tag pills */
 .tag { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
 .tag-active   { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid #10b981; }
 .tag-inactive { background: rgba(239,68,68,0.15);  color: #ef4444; border: 1px solid #ef4444; }
-
-/* Input tweaks */
-[data-testid="stNumberInput"] input { color: #e2e8f0 !important; background: #0d1225 !important; border-color: #1e293b !important; }
-
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0a0e1a; }
-::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
-
-/* ── Match app.py: hide white Streamlit toolbar & fix top spacing ── */
-header[data-testid="stHeader"] {
-    background-color: #0a0e1a !important;
-    border-bottom: 1px solid #1e293b !important;
-}
-[data-testid="stToolbar"],
-[data-testid="stDecoration"] {
-    display: none !important;
-}
-.stMainBlockContainer { padding-top: 2rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -173,8 +113,10 @@ def _load_schedules() -> list[dict]:
 def _save_schedules(schedules: list[dict]) -> None:
     SCHEDULES_FILE.write_text(json.dumps(schedules, indent=2), encoding="utf-8")
 
+import uuid
+
 def _new_id() -> str:
-    return f"SCH_{datetime.now().strftime('%Y%m%d%H%M%S')}_{random.randint(100,999)}"
+    return f"SCH_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
 def _validate_time(hh: int, mm: int) -> tuple[bool, str]:
     if not (0 <= hh <= 23 and 0 <= mm <= 59):
@@ -297,6 +239,8 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+st.info("🕒 **TIMEZONE NOTICE:** The execution engine runs strictly on **FTMO Broker Time (CE(S)T / Europe/Prague)**. All times you add below MUST be in FTMO time, not your local time. Please refer to the Live Chart or Main Dashboard to see the current FTMO time.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

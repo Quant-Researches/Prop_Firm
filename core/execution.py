@@ -95,40 +95,29 @@ class ExecutionEngine:
     def execute(self, order: OrderEvent, prefs: dict = None) -> FillEvent:
         """
         Execute an order and return a FillEvent.
-        Routes to MT5 or Simulation based on mode.
+        Routes to MT5.
         """
-        if self.mode == "MetaTrader5":
-            return self._execute_mt5(order, prefs)
-        return self._execute_sim(order)
-
-    def _execute_sim(self, order: OrderEvent) -> FillEvent:
-        # Simulated fill price
-        base_price = order.limit_price if order.limit_price else 100.0  # fallback
-        
-        # Apply slippage
-        if order.side == "BUY":
-            fill_price = base_price * (1 + self.slippage_pct)
-        else:
-            fill_price = base_price * (1 - self.slippage_pct)
-            
-        commission = order.qty * self.commission_per_lot
-
-        fill = FillEvent(
-            order_id=order.order_id if hasattr(order, 'order_id') else "SIM_" + datetime.utcnow().strftime("%H%M%S"),
-            symbol=order.symbol,
-            side=order.side,
-            qty=order.qty,
-            fill_price=fill_price,
-            commission=commission,
-            slippage=abs(fill_price - base_price),
-            mode=self.mode
-        )
-        self._fills.append(fill)
-        return fill
+        return self._execute_mt5(order, prefs)
 
 
     def _execute_mt5(self, order: OrderEvent, prefs: dict) -> FillEvent:
         import MetaTrader5 as mt5
+        
+        mt5_path = prefs.get("mt5_path", "")
+        account = prefs.get("mt5_account", "")
+        password = prefs.get("mt5_password", "")
+        server = prefs.get("mt5_server", "")
+        
+        init_kwargs = {}
+        if mt5_path:
+            init_kwargs["path"] = mt5_path
+            
+        if not mt5.initialize(**init_kwargs):
+            raise RuntimeError(f"MT5 API: Initialization failed. {mt5.last_error()}")
+            
+        if account and password and server:
+            if not mt5.login(int(account), password=password, server=server):
+                raise RuntimeError(f"MT5 API: Login failed. {mt5.last_error()}")
         
         # Determine lot size
         volume = float(order.qty)

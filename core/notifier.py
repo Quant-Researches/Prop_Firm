@@ -107,31 +107,37 @@ def _format_telegram_message(payload: dict, prefs: dict) -> str:
         escape_chars = r"_*[]()~`>#+-=|{}.!"
         return "".join(f"\\{char}" if char in escape_chars else char for char in text)
         
-    signal_icon = "🟢 BUY" if signal == "BUY" else "🔴 SELL" if signal == "SELL" else "⚪ " + str(signal)
+    signal_icon = "BUY" if signal == "BUY" else "SELL" if signal == "SELL" else str(signal)
     
-    msg = f"🚀 *TRADE PULSE QUANTS* 🚀\n\n"
-    msg += f"📊 *Symbol:* {escape_md(symbol)}\n"
-    msg += f"⏱ *Timeframe:* {escape_md(tf)}\n"
-    msg += f"🔔 *Signal:* {escape_md(signal_icon)}\n"
-    msg += f"💰 *LTP:* ₹{escape_md(f'{ltp:,.2f}')}\n"
-    msg += f"📉 *EMA Cross:* {escape_md(ema_fast)} \\/ {escape_md(ema_slow)}\n"
-    msg += f"🔍 *Phase:* {escape_md(phase)}\n\n"
+    msg = "*TRADE PULSE QUANTS*\n\n"
+    msg += "*Symbol:* " + escape_md(symbol) + "\n"
+    msg += "*Timeframe:* " + escape_md(tf) + "\n"
+    msg += "*Signal:* " + escape_md(signal_icon) + "\n"
+    msg += "*LTP:* $" + escape_md(f"{ltp:,.4f}") + "\n"
+    msg += "*EMA Cross:* " + escape_md(str(ema_fast)) + " / " + escape_md(str(ema_slow)) + "\n"
+    msg += "*Phase:* " + escape_md(phase) + "\n\n"
     
-    if "order" in payload:
+    if "order" in payload and payload["order"]:
         order = payload["order"]
-        qty = order.get('qty', 0)
-        sl = order.get('stop_loss', 0)
-        tgt = order.get('take_profit', 0)
-        msg += f"🛡 *Order Details*\n"
-        msg += f"👉 Qty: {escape_md(qty)}\n"
-        msg += f"🛑 SL: ₹{escape_md(f'{sl:,.2f}')}\n"
-        msg += f"🎯 Target: ₹{escape_md(f'{tgt:,.2f}')}\n\n"
+        qty        = order.get('qty', 0)
+        sl         = order.get('stop_loss', 0)
+        tgt        = order.get('take_profit', 0)
+        rr         = order.get('rr_ratio', 0)
+        est_loss   = order.get('est_loss_usd', 0)
+        est_profit = order.get('est_profit_usd', 0)
+        msg += "*Order Details*\n"
+        msg += "Lots: " + escape_md(str(qty)) + "\n"
+        msg += "SL: $" + escape_md(f"{sl:,.4f}") + "\n"
+        msg += "Target: $" + escape_md(f"{tgt:,.4f}") + "\n"
+        msg += "R:R: 1:" + escape_md(str(rr)) + "\n"
+        msg += "Est\. Loss \(if SL hit\): \-$" + escape_md(f"{est_loss:,.2f}") + "\n"
+        msg += "Est\. Profit \(if TP hit\): \+$" + escape_md(f"{est_profit:,.2f}") + "\n\n"
         
-    if "execution" in payload:
+    if "execution" in payload and payload["execution"]:
         exc = payload["execution"]
         price = exc.get('fill_price', exc.get('filled_price', 0))
-        msg += f"✅ *Execution*\n"
-        msg += f"👉 Avg Price: ₹{escape_md(f'{price:,.2f}')}\n\n"
+        msg += "*Execution*\n"
+        msg += "Fill Price: $" + escape_md(f"{price:,.4f}") + "\n\n"
         
     if payload.get("error"):
         err = payload.get("error")
@@ -186,6 +192,108 @@ def broadcast_lts_signal(json_payload: dict, prefs: dict, chart_bytes: bytes = N
         t.start()
 
 
+def _format_risk_telegram_message(alert_type: str, symbol: str, warnings: list,
+                                   suggestions: list, block_reason: str = "") -> str:
+    """
+    Formats a risk/news alert into a MarkdownV2 Telegram message.
+    alert_type: "BLOCKED" | "WARNING" | "NEWS_BLACKOUT" | "FTMO_WARNING"
+    """
+    def escape_md(text):
+        if not isinstance(text, str):
+            text = str(text)
+        escape_chars = r"_*[]()~`>#+-=|{}.!"
+        return "".join(f"\\{c}" if c in escape_chars else c for c in text)
+
+    icons = {
+        "BLOCKED":       "TRADE BLOCKED",
+        "NEWS_BLACKOUT": "NEWS BLACKOUT",
+        "FTMO_WARNING":  "FTMO WARNING",
+        "WARNING":       "RISK ALERT",
+    }
+    header = icons.get(alert_type, "RISK ALERT")
+
+    msg = "*TRADE PULSE QUANTS*\n"
+    msg += "*" + escape_md(header) + "*\n\n"
+    if symbol:
+        msg += "*Symbol:* " + escape_md(symbol) + "\n"
+    if block_reason:
+        msg += "*Reason:* " + escape_md(block_reason) + "\n"
+    if warnings:
+        msg += "\n*Details:*\n"
+        for w in warnings:
+            msg += escape_md(w) + "\n"
+    if suggestions:
+        msg += "\n*Action:*\n"
+        for s in suggestions:
+            msg += escape_md(s) + "\n"
+    return msg
+
+
+def broadcast_risk_alert(
+    alert_type: str,
+    symbol: str,
+    warnings: list,
+    suggestions: list,
+    prefs: dict,
+    block_reason: str = "",
+):
+    """
+    Broadcasts FTMO risk and news blackout alerts across all enabled channels.
+
+    alert_type options:
+        "BLOCKED"       - trade blocked by FTMO rules (daily loss, DD, max positions)
+        "NEWS_BLACKOUT" - trade blocked by news window (leverage > 1:30)
+        "FTMO_WARNING"  - approaching daily/DD limits but trade not yet blocked
+        "WARNING"       - generic risk warning
+
+    Channels: Desktop Toast, Sound, Telegram, Email (same prefs flags as trade alerts).
+    """
+    tg_msg    = _format_risk_telegram_message(alert_type, symbol, warnings, suggestions, block_reason)
+    plain_msg = "\n".join(warnings + suggestions)
+    title_map = {
+        "BLOCKED":       "Trade BLOCKED - FTMO Guard",
+        "NEWS_BLACKOUT": "NEWS BLACKOUT Active",
+        "FTMO_WARNING":  "FTMO Risk Warning",
+        "WARNING":       "Risk Alert",
+    }
+    title = title_map.get(alert_type, "Risk Alert")
+
+    threads = []
+
+    if prefs.get("alert_desktop", True):
+        t = threading.Thread(target=send_windows_notification, args=(title, plain_msg[:256]))
+        threads.append(t)
+
+    # Sound: use exclamation for blocks, default beep for warnings
+    if prefs.get("alert_sound", True):
+        if alert_type in ("BLOCKED", "NEWS_BLACKOUT"):
+            t = threading.Thread(target=play_alert_sound)
+            threads.append(t)
+
+    if prefs.get("alert_telegram", True):
+        t = threading.Thread(target=send_telegram_alert, args=(
+            prefs.get("telegram_bot_token", ""),
+            prefs.get("telegram_chat_id", ""),
+            tg_msg,
+            None,
+        ))
+        threads.append(t)
+
+    if prefs.get("alert_email", True):
+        t = threading.Thread(target=send_email_alert, args=(
+            prefs.get("gmail_sender", ""),
+            prefs.get("gmail_app_password", ""),
+            prefs.get("gmail_receiver", ""),
+            "Trade Pulse Quants - " + title,
+            plain_msg,
+            None,
+        ))
+        threads.append(t)
+
+    for t in threads:
+        t.start()
+
+
 def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"):
     """
     Takes the raw output from TradingEngine.run_pipeline_tick(), constructs the JSON payload,
@@ -226,18 +334,22 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
         "source": src
     }
     if order:
+        order_event = order
         json_payload["order"] = {
-            "qty": int(order.qty),
-            "stop_loss": round(order.stop_loss, 2),
-            "take_profit": round(order.take_profit, 2)
+            "qty": round(float(order_event.qty), 2),
+            "stop_loss": round(float(order_event.stop_loss), 4) if order_event.stop_loss else 0,
+            "take_profit": round(float(order_event.take_profit), 4) if order_event.take_profit else 0,
+            "rr_ratio": order_event.rr_ratio,
+            "est_loss_usd": order_event.est_loss_usd,
+            "est_profit_usd": order_event.est_profit_usd,
         }
     if fill:
+        fill_event = fill
         json_payload["execution"] = {
-            "fill_price": round(fill.fill_price, 2),
-            "commission": round(fill.commission, 2)
+            "fill_price": round(float(fill_event.fill_price), 4),
+            "commission": round(float(fill_event.commission), 2) if hasattr(fill_event, 'commission') else 0,
         }
-    if warnings:
-        json_payload["warnings"] = warnings
+    # risk_warnings removed — FTMO risk info is now logged in the event log, not the notifier
         
     # ── Generate static chart snapshot ──
     chart_bytes = None

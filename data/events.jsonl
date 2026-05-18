@@ -180,3 +180,9 @@
 {"timestamp": "2026-05-15T16:01:09.045469", "kind": "market", "msg": "Fetched 300 candles via mt5"}
 {"timestamp": "2026-05-15T16:01:09.148119", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: "}
 {"timestamp": "2026-05-15T16:01:09.150877", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: 100,000.00 | uPnL: 0.00"}
+{"timestamp": "2026-05-16T09:59:45.848063", "kind": "info", "msg": "Starting manual pipeline tick (Mode: MetaTrader5)..."}
+{"timestamp": "2026-05-16T09:59:49.202774", "kind": "market", "msg": "Fetched 300 candles via MT5"}
+{"timestamp": "2026-05-16T09:59:49.224361", "kind": "market", "msg": "Live LTP: $1.33"}
+{"timestamp": "2026-05-16T09:59:49.486503", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-05-16T09:59:49.494949", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: $100,000.00 | uPnL: $0.00"}
+{"timestamp": "2026-05-16T13:08:37.572224", "kind": "info", "msg": "Background Execution Engine Started (Paper Mode)."}

@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────
+# Dev / Test Artifacts — safe to ignore
+# (one-time patch scripts and scratch files
+#  that are no longer needed in production)
+# ─────────────────────────────────────────────
+_patch2.py
+_write_final.py
+mt5
+review.txt
+core/prop_firm_risk.py
+
+# ─────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# ─────────────────────────────────────────────
+# Virtual Environment
+# ─────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ─────────────────────────────────────────────
+# Sensitive Config & Credentials
+# (user_prefs.json holds MT5 login / API keys)
+# ─────────────────────────────────────────────
+config/user_prefs.json
+
+# ─────────────────────────────────────────────
+# Runtime Data (generated, not source)
+# ─────────────────────────────────────────────
+data/
+*.jsonl
+
+# ─────────────────────────────────────────────
+# Streamlit
+# ─────────────────────────────────────────────
+.streamlit/secrets.toml
+
+# ─────────────────────────────────────────────
+# OS / Editor noise
+# ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/

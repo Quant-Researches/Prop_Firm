@@ -108,7 +108,6 @@ class Strategy:
         return f"Strategy(name={self.name}, params={self.params})"
         
 from pprint import pprint
-import yfinance as yf
 import pandas as pd
 import numpy as np
 import time
