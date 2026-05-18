@@ -6,6 +6,8 @@
   "trading_symbol": "EURUSD",
   "timeframe": "1h",
   "trade_volume": 0.01,
+  "initial_balance": 10000.0,
+  "ftmo_sod_balance": 10000.0,
   "ema_fast": 5,
   "ema_slow": 8,
   "use_vol_filter": false,
