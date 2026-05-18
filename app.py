@@ -76,25 +76,31 @@ _storage = Storage(execution_mode="MetaTrader5")
 
 def _load_live_state():
     """Read the latest PnL snapshot and event log from the background daemon (main.py)."""
-    # 1. Load latest metrics
+    # 1. ALWAYS fetch real-time balance directly from MT5 broker
+    import MetaTrader5 as mt5
+    try:
+        term = mt5.terminal_info()
+        if term is not None:
+            acc = mt5.account_info()
+            if acc:
+                st.session_state.account_balance = acc.equity
+                st.session_state.daily_pnl       = acc.profit
+                st.session_state.open_positions  = mt5.positions_total() or 0
+    except Exception:
+        pass
+
+    # 2. Load PnL snapshot history as fallback / for trade count
     history = _storage.load_pnl_history()
     if history:
         last = history[-1]
-        st.session_state.account_balance = last.get("equity", 100_000.0)  # Use equity as the balanced tracking metric
-        st.session_state.daily_pnl = last.get("realised_pnl", 0.0) + last.get("unrealised_pnl", 0.0)
-        st.session_state.open_positions = last.get("open_positions", 0)
+        if st.session_state.account_balance == st.session_state.get("sod_balance", 100_000.0):
+            # MT5 wasn't available — fall back to last saved snapshot
+            st.session_state.account_balance = last.get("equity", st.session_state.account_balance)
+            st.session_state.daily_pnl       = last.get("unrealised_pnl", 0.0)
+            st.session_state.open_positions  = last.get("open_positions", 0)
         st.session_state.total_trades = last.get("total_trades", 0)
     else:
-        st.session_state.daily_pnl = 0.0
-        st.session_state.open_positions = 0
         st.session_state.total_trades = 0
-
-    # 1b. FETCH REAL-TIME BALANCE FROM MT5 (if active)
-    import MetaTrader5 as mt5
-    if mt5.terminal_info():
-        acc = mt5.account_info()
-        if acc:
-            st.session_state.account_balance = acc.equity
 
     # 2. Load recent events (max 60 most recent)
     log_lines = []
@@ -152,7 +158,7 @@ components.html("""
             var localStr = pad(now.getDate()) + ' ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear() + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
             
             var ftmoFormatter = new Intl.DateTimeFormat('en-GB', {
-                timeZone: 'Europe/Prague',
+                timeZone: 'Europe/Helsinki',
                 day: '2-digit', month: 'short', year: 'numeric',
                 hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
             });
@@ -161,7 +167,7 @@ components.html("""
             ftmoParts.forEach(function(p){ ftmoMap[p.type] = p.value; });
             var ftmoStr = ftmoMap.day + ' ' + ftmoMap.month + ' ' + ftmoMap.year + ' ' + ftmoMap.hour + ':' + ftmoMap.minute + ':' + ftmoMap.second;
             
-            el.innerHTML = '<span style="color:#94a3b8;">Local:</span> ' + localStr + ' <span style="color:#64748b;margin:0 8px;">|</span> <span style="color:#94a3b8;">FTMO:</span> ' + ftmoStr;
+            el.innerHTML = '<span style="color:#94a3b8;">Local:</span> ' + localStr + ' <span style="color:#64748b;margin:0 8px;">|</span> <span style="color:#94a3b8;">FTMO MT5:</span> ' + ftmoStr;
         } catch(e) {}
     }
 
@@ -263,9 +269,8 @@ with col_uptime:
 st.markdown("<br>", unsafe_allow_html=True)
 
 
-# ── Metric Cards ───────────────────────────────────────────────────────────────
-if st.session_state.bot_running:
-    _load_live_state()
+# ── Metric Cards ── always refresh from MT5 on every page load ────────────────
+_load_live_state()
     
 st.markdown('<div class="section-label">📊 Live Metrics</div>', unsafe_allow_html=True)
     
@@ -295,9 +300,9 @@ with m3:
     pnl_abs = abs(st.session_state.daily_pnl)
     st.markdown(f"""
     <div class="metric-card" style="--accent: linear-gradient(90deg,#10b981,#059669);">
-        <div class="metric-label">Daily PnL</div>
-        <div class="metric-value">₹{pnl_sign}{st.session_state.daily_pnl:,.0f}</div>
-        <div class="metric-delta {pnl_color}">{pnl_icon} {pnl_sign}₹{pnl_abs:,.0f} today</div>
+        <div class="metric-label">Floating PnL</div>
+        <div class="metric-value">${pnl_sign}{st.session_state.daily_pnl:,.2f}</div>
+        <div class="metric-delta {pnl_color}">{pnl_icon} {pnl_sign}${pnl_abs:,.2f} open</div>
     </div>""", unsafe_allow_html=True)
 
 with m4:
@@ -307,9 +312,9 @@ with m4:
     bd_sign   = "+" if bal_delta >= 0 else ""
     st.markdown(f"""
     <div class="metric-card" style="--accent: linear-gradient(90deg,#38bdf8,#0ea5e9);">
-        <div class="metric-label">Account Balance</div>
-        <div class="metric-value">₹{st.session_state.account_balance:,.0f}</div>
-        <div class="metric-delta {bd_color}">{bd_sign}₹{bal_delta:,.0f} vs start</div>
+        <div class="metric-label">Live Equity (MT5)</div>
+        <div class="metric-value">${st.session_state.account_balance:,.2f}</div>
+        <div class="metric-delta {bd_color}">{bd_sign}${bal_delta:,.2f} vs SOD</div>
     </div>""", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -362,8 +367,8 @@ with cfg_col:
                 <span style="color:#f1f5f9;font-weight:600;">{len(st.session_state.symbols)}</span>
             </div>
             <div style="display:flex;justify-content:space-between;">
-                <span style="color:#64748b;">Capital</span>
-                <span style="color:#34d399;font-weight:600;">₹{st.session_state.account_balance:,.0f}</span>
+                <span style="color:#64748b;">Live Equity</span>
+                <span style="color:#34d399;font-weight:600;">${st.session_state.account_balance:,.2f}</span>
             </div>
         </div>
     </div>
@@ -384,7 +389,6 @@ with cfg_col:
     """, unsafe_allow_html=True)
 
 
-# ── Auto-refresh when running ──────────────────────────────────────────────────
-if st.session_state.bot_running:
-    time.sleep(2)
-    st.rerun()
+# ── Auto-refresh always (pulls live MT5 equity on each cycle) ─────────────────
+time.sleep(3)
+st.rerun()

@@ -378,21 +378,45 @@ class TradingEngine:
                                     except Exception as _ne:
                                         logger.warning(f"Notifier failed on execution error: {_ne}")
 
-        # 5. Portfolio MTM
+        # 5. Live MT5 Account State for tick log — always read from broker, never from paper Portfolio
         current_px = df['Close'].iloc[-1]
         self.portfolio.mark_to_market({sym: current_px})
-        
+
+        # Fetch live account values from MT5 for accurate reporting
+        live_equity   = 0.0
+        live_pnl      = 0.0
+        live_positions = 0
+        try:
+            _acc = mt5.account_info()
+            if _acc:
+                live_equity    = _acc.equity
+                live_pnl       = _acc.profit
+            live_positions = mt5.positions_total() or 0
+        except Exception:
+            pass
+
+        # Fall back to portfolio snap only when MT5 is disconnected
         snap = self.portfolio.get_summary()
+        if live_equity == 0.0:
+            live_equity    = snap.equity
+            live_pnl       = snap.unrealised_pnl
+            live_positions = snap.open_positions
+
         self.storage.save_pnl_snapshot(
             timestamp=datetime.now(),
-            equity=snap.equity,
-            cash=snap.cash,
-            realised_pnl=snap.realised_pnl,
-            unrealised_pnl=snap.unrealised_pnl,
-            open_positions=snap.open_positions,
+            equity=live_equity,
+            cash=live_equity,           # for FTMO, equity = cash (margin account)
+            realised_pnl=0.0,
+            unrealised_pnl=live_pnl,
+            open_positions=live_positions,
             total_trades=snap.total_trades
         )
-        self.storage.log_event("info", f"Tick Complete. Open Pos: {snap.open_positions} | Equity: ${snap.equity:,.2f} | uPnL: ${snap.unrealised_pnl:,.2f}")
+        self.storage.log_event(
+            "info",
+            f"Tick Complete. Open Pos: {live_positions} "
+            f"| Equity: ${live_equity:,.2f} "
+            f"| uPnL: ${live_pnl:,.2f}"
+        )
         
         return {
             "signal": sig,
