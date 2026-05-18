@@ -75,54 +75,81 @@ from core.storage import Storage
 _storage = Storage(execution_mode="MetaTrader5")
 
 def _load_live_state():
-    """Read the latest PnL snapshot and event log from the background daemon (main.py)."""
-    # 1. ALWAYS fetch real-time balance directly from MT5 broker
+    """Fetch live MT5 account state + event log from background daemon."""
     import MetaTrader5 as mt5
-    try:
-        term = mt5.terminal_info()
-        if term is not None:
-            acc = mt5.account_info()
-            if acc:
-                st.session_state.account_balance = acc.equity
-                st.session_state.daily_pnl       = acc.profit
-                st.session_state.open_positions  = mt5.positions_total() or 0
-    except Exception:
-        pass
 
-    # 2. Load PnL snapshot history as fallback / for trade count
-    history = _storage.load_pnl_history()
-    if history:
-        last = history[-1]
-        if st.session_state.account_balance == st.session_state.get("sod_balance", 100_000.0):
-            # MT5 wasn't available — fall back to last saved snapshot
+    # -- Pull credentials from saved prefs --
+    prefs = {}
+    if _PREFS_FILE.exists():
+        try:
+            prefs = json.loads(_PREFS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    acc_no  = prefs.get("mt5_account", "")
+    pwd     = prefs.get("mt5_password", "")
+    svr     = prefs.get("mt5_server", "")
+    path    = prefs.get("mt5_path", "")
+
+    # -- Initialize MT5 in this Streamlit process --
+    mt5_ok = False
+    try:
+        init_kwargs = {}
+        if path:
+            init_kwargs["path"] = path
+        if acc_no and pwd and svr:
+            init_kwargs["login"]    = int(acc_no)
+            init_kwargs["password"] = pwd
+            init_kwargs["server"]   = svr
+        mt5_ok = mt5.initialize(**init_kwargs)
+    except Exception:
+        mt5_ok = False
+
+    if mt5_ok:
+        acc = mt5.account_info()
+        if acc:
+            st.session_state.account_balance = acc.equity
+            st.session_state.daily_pnl       = acc.profit
+            st.session_state.open_positions  = mt5.positions_total() or 0
+            st.session_state._mt5_server     = acc.server
+            st.session_state._mt5_login      = acc.login
+            st.session_state._mt5_leverage   = acc.leverage
+            st.session_state._mt5_currency   = acc.currency
+            st.session_state._mt5_connected  = True
+        else:
+            st.session_state._mt5_connected = False
+    else:
+        st.session_state._mt5_connected = False
+        # Fallback: use last PnL snapshot from daemon
+        history = _storage.load_pnl_history()
+        if history:
+            last = history[-1]
             st.session_state.account_balance = last.get("equity", st.session_state.account_balance)
             st.session_state.daily_pnl       = last.get("unrealised_pnl", 0.0)
             st.session_state.open_positions  = last.get("open_positions", 0)
-        st.session_state.total_trades = last.get("total_trades", 0)
-    else:
-        st.session_state.total_trades = 0
+            st.session_state.total_trades    = last.get("total_trades", 0)
 
-    # 2. Load recent events (max 60 most recent)
+    # -- Load trade count from snapshot history --
+    history = _storage.load_pnl_history()
+    if history:
+        st.session_state.total_trades = history[-1].get("total_trades", 0)
+
+    # -- Load event log from daemon's events.jsonl --
     log_lines = []
     if _storage.events_path.exists():
         try:
-            with _storage.events_path.open("r", encoding="utf-8") as f:
-                # Read all lines, reverse them to get most recent first
-                all_lines = [ln for ln in f if ln.strip()]
-                for line in reversed(all_lines[-60:]):
-                    evt = json.loads(line)
-                    ts_full = evt.get("timestamp", "")
-                    ts = ts_full.split("T")[1][:8] if "T" in ts_full else ts_full
-                    kind = evt.get("kind", "info")
-                    msg = evt.get("msg", "")
-                    
-                    icon, cls, label = EVENT_TEMPLATES.get(kind, ("·", "ev-info", "INFO"))
-                    entry = f'<span class="ev-info">[{ts}]</span> {icon} <span class="{cls}">[{label}]</span> {msg}'
-                    log_lines.append(entry)
+            all_lines = [ln for ln in _storage.events_path.open("r", encoding="utf-8") if ln.strip()]
+            for line in reversed(all_lines[-60:]):
+                evt  = json.loads(line)
+                ts   = evt.get("timestamp", "").split("T")[1][:8] if "T" in evt.get("timestamp","") else ""
+                kind = evt.get("kind", "info")
+                msg  = evt.get("msg", "")
+                icon, cls, label = EVENT_TEMPLATES.get(kind, ("·", "ev-info", "INFO"))
+                log_lines.append(f'<span class="ev-info">[{ts}]</span> {icon} <span class="{cls}">[{label}]</span> {msg}')
         except Exception as e:
             log_lines.append(f'<span class="ev-info">Error reading logs: {e}</span>')
-            
     st.session_state.event_log = log_lines
+
 
 
 
@@ -343,48 +370,62 @@ with log_col:
 
 with cfg_col:
     st.markdown('<div class="section-label">⚙️ Active Config</div>', unsafe_allow_html=True)
+
+    # Resolve live values from prefs + MT5 session state
+    _prefs = {}
+    if _PREFS_FILE.exists():
+        try:
+            _prefs = json.loads(_PREFS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    _sym      = _prefs.get("trading_symbol", st.session_state.get("trading_symbol", "—"))
+    _tf       = _prefs.get("timeframe",       st.session_state.get("timeframe", "—")).upper()
+    _ema_f    = _prefs.get("ema_fast",        st.session_state.get("ema_fast", "—"))
+    _ema_s    = _prefs.get("ema_slow",        st.session_state.get("ema_slow", "—"))
+    _server   = st.session_state.get("_mt5_server",   _prefs.get("mt5_server", "—"))
+    _login    = st.session_state.get("_mt5_login",    _prefs.get("mt5_account", "—"))
+    _leverage = st.session_state.get("_mt5_leverage", "—")
+    _currency = st.session_state.get("_mt5_currency", "USD")
+    _connected = st.session_state.get("_mt5_connected", False)
+    _conn_pill = '<span style="color:#10b981;font-weight:700;">● LIVE</span>' if _connected else '<span style="color:#ef4444;font-weight:700;">● OFFLINE</span>'
+
+    _eq   = st.session_state.account_balance
+    _pnl  = st.session_state.daily_pnl
+    _sod  = st.session_state.get("sod_balance", _prefs.get("ftmo_sod_balance", _eq))
+    _dd   = ((_sod - _eq) / _sod * 100) if _sod > 0 else 0.0
+    _dd_color = "#ef4444" if _dd > 3 else "#fbbf24" if _dd > 1 else "#10b981"
+
+    _reset = _prefs.get("daily_reset_time", "00:00")
+    _bar_count = _prefs.get("bar_count", 300)
+    _risk_pct  = _prefs.get("ftmo_risk_pct", 5.0)
+    _vol_filter = "ON" if _prefs.get("use_vol_filter", False) else "OFF"
+    _atr_filter = "ON" if _prefs.get("use_atr_filter", True)  else "OFF"
+
+    def _row(label, val, color="#f1f5f9", border=True):
+        br = "border-bottom:1px solid #1e293b;padding-bottom:8px;" if border else ""
+        return f'<div style="display:flex;justify-content:space-between;{br}margin-bottom:8px;"><span style="color:#64748b;">{label}</span><span style="color:{color};font-weight:600;">{val}</span></div>'
+
     st.markdown(f"""
     <div class="metric-card" style="--accent: linear-gradient(90deg,#6366f1,#8b5cf6); padding: 18px 20px;">
-        <div style="display:grid; gap:10px; font-size:0.83rem;">
-            <div style="display:flex;justify-content:space-between;border-bottom:1px solid #1e293b;padding-bottom:8px;">
-                <span style="color:#64748b;">Mode</span>
-                <span class="mode-pill {MODE_COLORS.get(st.session_state.bot_mode,'mode-live')}">{st.session_state.bot_mode}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;border-bottom:1px solid #1e293b;padding-bottom:8px;">
-                <span style="color:#64748b;">Timeframe</span>
-                <span style="color:#f1f5f9;font-weight:600;">{st.session_state.timeframe}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;border-bottom:1px solid #1e293b;padding-bottom:8px;">
-                <span style="color:#64748b;">Trailing SL</span>
-                <span style="color:#f87171;font-weight:600;">1.00%</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;border-bottom:1px solid #1e293b;padding-bottom:8px;">
-                <span style="color:#64748b;">Target</span>
-                <span style="color:#10b981;font-weight:600;">2.50%</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;border-bottom:1px solid #1e293b;padding-bottom:8px;">
-                <span style="color:#64748b;">Symbols</span>
-                <span style="color:#f1f5f9;font-weight:600;">{len(st.session_state.symbols)}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;">
-                <span style="color:#64748b;">Live Equity</span>
-                <span style="color:#34d399;font-weight:600;">${st.session_state.account_balance:,.2f}</span>
-            </div>
+        <div style="display:grid; gap:2px; font-size:0.82rem;">
+            {_row("MT5 Status", _conn_pill, border=True)}
+            {_row("Server", _server)}
+            {_row("Login", str(_login))}
+            {_row("Leverage", f"1:{_leverage}" if _leverage != "—" else "—")}
+            {_row("Currency", _currency)}
+            {_row("Symbol", _sym, "#38bdf8")}
+            {_row("Timeframe", _tf, "#818cf8")}
+            {_row("EMA Fast / Slow", f"{_ema_f} / {_ema_s}")}
+            {_row("Vol Filter", _vol_filter, "#fbbf24" if _vol_filter=="ON" else "#64748b")}
+            {_row("ATR Filter", _atr_filter, "#fbbf24" if _atr_filter=="ON" else "#64748b")}
+            {_row("Bar Count", str(_bar_count))}
+            {_row("Daily Reset", f"{_reset} Prague")}
+            {_row("SOD Balance", f"${_sod:,.2f}", "#94a3b8")}
+            {_row("Live Equity", f"${_eq:,.2f}", "#34d399")}
+            {_row("Float PnL", f"${_pnl:+,.2f}", "#10b981" if _pnl >= 0 else "#ef4444")}
+            {_row("Drawdown", f"{_dd:.2f}%", _dd_color, border=False)}
         </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="section-label">🔗 Architecture</div>', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="metric-card" style="--accent: linear-gradient(90deg,#334155,#475569); font-size:0.75rem; line-height:2; font-family:'JetBrains Mono',monospace; color:#64748b;">
-        <span style="color:#818cf8;">DataFeed</span> → MarketEvent<br>
-        <span style="color:#a78bfa;">Strategy</span> → SignalEvent<br>
-        <span style="color:#c084fc;">RiskMgr</span> → OrderEvent<br>
-        <span style="color:#e879f9;">OMS</span> → submit()<br>
-        <span style="color:#f472b6;">Execution</span> → FillEvent<br>
-        <span style="color:#fb7185;">Portfolio</span> → on_fill()<br>
-        <span style="color:#fda4af;">Storage</span> → persist()
     </div>
     """, unsafe_allow_html=True)
 
@@ -392,3 +433,4 @@ with cfg_col:
 # ── Auto-refresh always (pulls live MT5 equity on each cycle) ─────────────────
 time.sleep(3)
 st.rerun()
+
