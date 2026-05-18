@@ -99,7 +99,12 @@ def main_loop():
                 if s.get("enabled", True) and s.get("day") == current_day_hel and s.get("time") == current_time_hel:
                     should_run = True
                     break
-                    
+
+            # ALWAYS mark this minute as processed — regardless of whether a tick fired.
+            # This is critical: without this, the daemon re-enters this block every 10s
+            # within the same minute when there is no scheduled slot.
+            last_run_minute = current_minute
+
             if should_run:
                 try:
                     result = engine.run_pipeline_tick(is_manual=False)
@@ -134,9 +139,7 @@ def main_loop():
                         )
                     except Exception:
                         pass
-                finally:
-                    last_run_minute = current_minute
-                    
+
         time.sleep(10)
 
 if __name__ == "__main__":

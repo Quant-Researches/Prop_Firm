@@ -373,6 +373,17 @@ def init_session_state():
         except Exception:
             pass
 
+    # Attempt to read live equity from MT5 on first load
+    _live_balance = float(user_prefs.get("ftmo_sod_balance", 100_000.0))
+    try:
+        import MetaTrader5 as _mt5
+        if _mt5.terminal_info() is not None:
+            _acc = _mt5.account_info()
+            if _acc:
+                _live_balance = _acc.equity
+    except Exception:
+        pass
+
     defaults = {
         "bot_running": False,
         "bot_mode": "Live",
@@ -381,7 +392,7 @@ def init_session_state():
         "total_trades": 0,
         "open_positions": 0,
         "daily_pnl": 0.0,
-        "account_balance": 100_000.0,
+        "account_balance": _live_balance,
         "symbols": ["GOLD", "SILVER"],
         "timeframe": user_prefs.get("timeframe", "5m"),
         "trailing_sl_pct": 1.0,
