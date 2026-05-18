@@ -240,7 +240,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-st.info("🕒 **TIMEZONE NOTICE:** The execution engine runs strictly on **FTMO Broker Time (CE(S)T / Europe/Prague)**. All times you add below MUST be in FTMO time, not your local time. Please refer to the Live Chart or Main Dashboard to see the current FTMO time.")
+st.info("🕒 **TIMEZONE NOTICE:** The execution engine runs strictly on **FTMO MT5 Broker Time (Europe/Helsinki)**. All times you add below MUST be in FTMO Server Time, not your local time. Please refer to the Live Chart or Main Dashboard to see the current FTMO MT5 Server Time.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
