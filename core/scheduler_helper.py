@@ -6,13 +6,11 @@ Automatically aligns schedules with standard FTMO active hours for XAUUSD (Gold)
 
 Timezones:
 - FTMO MT5 Server Time: Europe/Helsinki (EET/EEST = GMT+2/GMT+3)
-- Scheduler Execution Time: Europe/Prague (CET/CEST = GMT+1/GMT+2)
-- Prague is exactly 1 hour behind MT5 Server Time.
+- Scheduler Execution Time: Europe/Helsinki (EET/EEST = GMT+2/GMT+3)
 
 Active hours for XAUUSD on FTMO:
-- MT5 Session: Monday 01:05 to Friday 23:59 (excluding daily breaks 23:59 to 01:05)
-- Prague Time Conversion: Monday 00:05 to Friday 22:59 (excluding daily breaks 22:59 to 00:05)
-- General Tradeable hours per day: 00:05 to 22:59 Prague Time.
+- MT5 Broker Session: Monday 01:05 to Friday 23:59 (excluding daily breaks 23:59 to 01:05)
+- General Tradeable hours per day: 01:05 to 23:59 FTMO Server Time (Europe/Helsinki).
 """
 
 from __future__ import annotations
@@ -31,7 +29,7 @@ def generate_ftmo_schedule(symbol: str, timeframe_str: str) -> list[dict]:
     Generates trading schedule slots matching standard FTMO active hours for XAUUSD
     and other instruments, aligned with the selected timeframe/interval.
     
-    Active hours: Monday to Friday from 00:05 to 22:59 Prague Time.
+    Active hours: Monday to Friday from 01:05 to 23:59 FTMO Time (Europe/Helsinki).
     Timeframe steps:
         - "1m": every 1 minute
         - "5m": every 5 minutes
@@ -56,28 +54,28 @@ def generate_ftmo_schedule(symbol: str, timeframe_str: str) -> list[dict]:
     new_schedules = []
     
     for day in active_days:
-        # Tradeable window in Prague Time minutes of day:
-        # 00:05 is 5 minutes.
-        # 22:59 is 1379 minutes (22 * 60 + 59).
-        start_min = 5
-        end_min = 1379
+        # Tradeable window in FTMO Time minutes of day:
+        # 01:05 is 65 minutes (1 * 60 + 5).
+        # 23:59 is 1439 minutes (23 * 60 + 59).
+        start_min = 65
+        end_min = 1439
         
         # 1-day timeframe runs once per day, near daily close
         if step == 1440:
             new_schedules.append({
-                "id": f"SCH_{day}_2200_{uuid.uuid4().hex[:6].upper()}",
+                "id": f"SCH_{day}_2300_{uuid.uuid4().hex[:6].upper()}",
                 "day": day,
-                "time": "22:00",
+                "time": "23:00",
                 "enabled": True,
                 "created_at": datetime.now().isoformat(),
                 "last_run": None
             })
             continue
             
-        # Hour-aligned intervals
+        # Hour-aligned intervals (e.g. 02:00, 03:00...)
         if step >= 60:
-            current_min = step
-            while current_min <= 1320:  # 22:00
+            current_min = 120  # First standard close is 02:00 (120 min)
+            while current_min <= 1380:  # 23:00
                 if start_min <= current_min <= end_min:
                     hh = current_min // 60
                     mm = current_min % 60
@@ -92,7 +90,7 @@ def generate_ftmo_schedule(symbol: str, timeframe_str: str) -> list[dict]:
                     })
                 current_min += step
         else:
-            # Minute-aligned intervals starting at 00:05
+            # Minute-aligned intervals starting at 01:05
             current_min = start_min
             while current_min <= end_min:
                 hh = current_min // 60
@@ -139,11 +137,11 @@ def update_and_save_schedule(symbol: str, timeframe_str: str, prefs: dict = None
         try:
             from core.notifier import broadcast_risk_alert
             warnings = [
-                f"SCHEDULE AUTOMATICALLY UPDATED",
+                f"SCHEDULE AUTOMATICALLY UPDATED (FTMO TIME)",
                 f"Asset Symbol: {symbol}",
                 f"Timeframe Interval: {timeframe_str}",
                 f"Total Active Slots: {len(new_scheds)}",
-                f"Active Window: Mon-Fri 00:05 to 22:59 (Prague)",
+                f"Active Window: Mon-Fri 01:05 to 23:59 (FTMO Server Time)",
                 f"All previous custom schedules have been purged."
             ]
             suggestions = [

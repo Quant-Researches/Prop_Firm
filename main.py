@@ -26,9 +26,9 @@ def main_loop():
     last_run_minute = None
     
     while True:
-        # Daily reset uses Prague time (CE(S)T = GMT+2 in summer)
-        # 00:00 Prague (CEST) = 01:00 MT5 chart (GMT+3) = 03:30 IST
-        now = datetime.now(ZoneInfo("Europe/Prague"))
+        # Daily reset and scheduling uses FTMO Broker Time (EET/EEST = Europe/Helsinki)
+        # perfectly matching your Live Chart clock and MT5 candle timestamps!
+        now = datetime.now(ZoneInfo("Europe/Helsinki"))
         current_day    = now.strftime("%A")
         current_time   = now.strftime("%H:%M")
         current_minute = now.strftime("%Y-%m-%d %H:%M")
@@ -64,8 +64,8 @@ def main_loop():
                                 engine.storage.log_event(
                                     "info",
                                     f"SOD Snapshot: Balance={acc_info.balance} "
-                                    f"| Prague={now.strftime('%H:%M')} (reset time) "
-                                    f"| MT5={reset_time} +1h | IST ~03:30"
+                                    f"| FTMO Time={now.strftime('%H:%M')} (reset time) "
+                                    f"| IST ~02:30 or 03:30 (depending on DST)"
                                 )
                 except Exception as e:
                     engine.storage.log_event("error", f"Scheduled MT5 task failed: {e}")
