@@ -166,7 +166,7 @@ with st.sidebar:
 
 
 # ── Data Fetch ────────────────────────────────────────────────────────────────
-@st.cache_data(ttl=55, show_spinner=False)
+@st.cache_data(ttl=2, show_spinner=False)
 def _load_data(symbol, interval, bar_count, ema_fast, ema_slow, use_vol_filter, use_atr_filter, mt5_path, account, password, server, _cache_bust=0):
     from core.mt5_data import fetch_mt5_candles
     from core.strategy import RealTimeSignalGenerator

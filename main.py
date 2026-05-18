@@ -26,12 +26,17 @@ def main_loop():
     last_run_minute = None
     
     while True:
-        # Daily reset and scheduling uses FTMO Broker Time (EET/EEST = Europe/Helsinki)
-        # perfectly matching your Live Chart clock and MT5 candle timestamps!
-        now = datetime.now(ZoneInfo("Europe/Helsinki"))
-        current_day    = now.strftime("%A")
-        current_time   = now.strftime("%H:%M")
-        current_minute = now.strftime("%Y-%m-%d %H:%M")
+        # Dual-Core Time tracking for absolute alignment with FTMO
+        # We use Europe/Helsinki (EET/EEST) for schedules & chart alignment,
+        # and Europe/Prague (CET/CEST) strictly for daily drawdown reset tracking!
+        now_hel = datetime.now(ZoneInfo("Europe/Helsinki"))
+        now_prg = datetime.now(ZoneInfo("Europe/Prague"))
+        
+        current_day_hel  = now_hel.strftime("%A")
+        current_time_hel = now_hel.strftime("%H:%M")
+        current_minute   = now_hel.strftime("%Y-%m-%d %H:%M")
+        
+        current_time_prg = now_prg.strftime("%H:%M")
         
         # Only check once per minute
         if last_run_minute != current_minute:
@@ -47,7 +52,8 @@ def main_loop():
             
             reset_time = prefs.get("daily_reset_time", "00:00")
             
-            if current_time == reset_time:
+            # Daily reset triggers strictly on Prague Time (CE(S)T) as configured in the settings!
+            if current_time_prg == reset_time:
                 try:
                     from core.mt5_connection import MT5Connection
                     acc = prefs.get("mt5_account")
@@ -64,8 +70,9 @@ def main_loop():
                                 engine.storage.log_event(
                                     "info",
                                     f"SOD Snapshot: Balance={acc_info.balance} "
-                                    f"| FTMO Time={now.strftime('%H:%M')} (reset time) "
-                                    f"| IST ~02:30 or 03:30 (depending on DST)"
+                                    f"| Prague Time={now_prg.strftime('%H:%M')} (reset time) "
+                                    f"| Helsinki Time={now_hel.strftime('%H:%M')} "
+                                    f"| IST={datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%H:%M')}"
                                 )
                 except Exception as e:
                     engine.storage.log_event("error", f"Scheduled MT5 task failed: {e}")
@@ -88,7 +95,8 @@ def main_loop():
             should_run = False
             
             for s in scheds:
-                if s.get("enabled", True) and s.get("day") == current_day and s.get("time") == current_time:
+                # Schedules are checked strictly against Helsinki broker time
+                if s.get("enabled", True) and s.get("day") == current_day_hel and s.get("time") == current_time_hel:
                     should_run = True
                     break
                     

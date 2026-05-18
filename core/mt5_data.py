@@ -22,6 +22,10 @@ def fetch_mt5_candles(symbol, timeframe_str, bar_count=500, mt5_path="", account
         err = mt5.last_error()
         return None, "MT5", f"Connection error: {err}"
         
+    # Ensure symbol is active in Market Watch for real-time streaming
+    if not mt5.symbol_select(symbol, True):
+        return None, "MT5", f"Symbol '{symbol}' not found or subscription failed."
+        
     rates = mt5.copy_rates_from_pos(symbol, tf, 0, bar_count)
     if rates is None or len(rates) == 0:
         return None, "MT5", f"No data for {symbol}"
@@ -40,6 +44,10 @@ def fetch_mt5_ltp(symbol, mt5_path="", account="", password="", server=""):
     if not MT5Connection.connect(account, password, server, mt5_path):
         err = mt5.last_error()
         return 0.0, f"Connection error: {err}"
+        
+    # Ensure symbol is active in Market Watch for real-time tick streaming
+    if not mt5.symbol_select(symbol, True):
+        return 0.0, f"Symbol '{symbol}' not found or subscription failed."
         
     tick = mt5.symbol_info_tick(symbol)
     if tick:
