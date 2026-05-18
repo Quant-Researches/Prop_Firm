@@ -113,7 +113,6 @@ DEFAULT_PREFS = {
     "ema_slow":          8,
     "use_vol_filter":    True,
     "use_atr_filter":    True,
-    "trade_volume":      0.01,
     "bar_count":         300,
     "initial_balance":   10_000.0,
     "mt5_account":       "",
@@ -178,7 +177,7 @@ with st.form("settings_form", border=False):
     st.markdown('<div class="card-title"><span>📊</span> Instrument & Execution</div>', unsafe_allow_html=True)
     
     POPULAR_SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "US30.cash", "US100.cash", "US500.cash", "USOIL.cash", "EURJPY", "Custom..."]
-    c4, c5, c6 = st.columns(3)
+    c4, c5 = st.columns(2)
     
     saved_sym = st.session_state.get("trading_symbol", "XAUUSD")
     sym_idx = POPULAR_SYMBOLS.index(saved_sym) if saved_sym in POPULAR_SYMBOLS else len(POPULAR_SYMBOLS) - 1
@@ -193,8 +192,6 @@ with st.form("settings_form", border=False):
     tf_opts = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
     tf_val = st.session_state.get("timeframe", "5m")
     timeframe = c5.selectbox("Timeframe", tf_opts, index=tf_opts.index(tf_val) if tf_val in tf_opts else 1, help="Candle resolution used for strategy signals.")
-    
-    trade_volume = c6.number_input("Trade Volume (Lots)", value=float(st.session_state.get("trade_volume", 0.01)), step=0.01, format="%.2f", help="Lot size for automated trades.")
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
     cb1, cb2 = st.columns(2)
@@ -289,7 +286,6 @@ with st.form("settings_form", border=False):
             "mt5_path": mt5_path.strip(),
             "trading_symbol": trading_symbol.strip(),
             "timeframe": timeframe,
-            "trade_volume": float(trade_volume),
             "initial_balance": float(initial_balance),
             "ema_fast": int(ema_fast),
             "ema_slow": int(ema_slow),

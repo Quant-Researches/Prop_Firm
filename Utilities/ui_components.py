@@ -403,7 +403,6 @@ def init_session_state():
         "ema_slow":        user_prefs.get("ema_slow", 8),
         "use_vol_filter":  user_prefs.get("use_vol_filter", True),
         "use_atr_filter":  user_prefs.get("use_atr_filter", True),
-        "trade_volume":    user_prefs.get("trade_volume", 0.01),
         "initial_balance": float(user_prefs.get("initial_balance", 10_000.0)),
         "trading_symbol":  user_prefs.get("trading_symbol", "XAUUSD"),
         "mt5_account":     user_prefs.get("mt5_account", ""),

@@ -49,9 +49,6 @@ class _Config:
     use_vol_filter: bool = True
     bar_count: int = 300
 
-    # ── Execution ────────────────────────────────────────────────────────
-    trade_volume: int = 1
-
     # ── Risk ─────────────────────────────────────────────────────────────
     default_stop_loss_pct: float = 0.002
     default_take_profit_pct: float = 0.0045
@@ -110,7 +107,6 @@ _SERIALISABLE_KEYS = [
     "ema_slow",
     "use_vol_filter",
     "bar_count",
-    "trade_volume",
     "default_stop_loss_pct",
     "default_take_profit_pct",
     "log_level",
