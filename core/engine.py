@@ -28,7 +28,6 @@ class TradingEngine:
             max_drawdown_pct=0.10,       # 10% FTMO max drawdown
             risk_per_trade=100.0,        # $100 risk per trade
             rr_ratio=2.0,                # 1:2 R:R → $200 target
-            sl_atr_mult=1.5,             # SL = 1.5x ATR
             max_positions=1,             # one trade at a time on FTMO
         )
         self.oms = OMS(mode=mode)
@@ -146,9 +145,14 @@ class TradingEngine:
         # 4. Execution Routing
         _order = None   # tracked for return dict / notifier
         _fill  = None
+        _trade_blocked = False
+        _block_reason = ""
+        _risk_warnings: list = []
         if sig in ["BUY", "SELL"] and execution_mode == "MetaTrader5":
-            close_px = df['Close'].iloc[-1]
-            atr      = df['ATR'].iloc[-1] if 'ATR' in df.columns else (close_px * 0.005)
+            strategy_df = result.get("data")
+            price_df = strategy_df if strategy_df is not None and not strategy_df.empty else df
+            close_px = price_df['Close'].iloc[-1]
+            atr      = price_df['ATR'].iloc[-1] if 'ATR' in price_df.columns else (close_px * 0.005)
 
             # ── Sync starting balance from SOD snapshot ────────────────────
             # Use initial_balance from settings as the SOD fallback — never hardcode
@@ -167,6 +171,16 @@ class TradingEngine:
                     current_balance = acc.equity
                     daily_pnl_live  = acc.profit
                     leverage_live   = acc.leverage
+                    # Auto-initialize SOD balance from live MT5 balance if not set
+                    if "ftmo_sod_balance" not in prefs:
+                        prefs["ftmo_sod_balance"] = float(acc.balance)
+                        try:
+                            Path("config/user_prefs.json").write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+                            self.storage.log_event("info", f"Auto-initialized SOD Balance from MT5: ${acc.balance:,.2f}")
+                        except Exception as _pe:
+                            logger.error(f"Failed to auto-save SOD balance: {_pe}")
+                        sod_balance = float(acc.balance)
+                        self.risk_manager.update_starting_balance(sod_balance)
                 # Live open position count — handles restarts & MT5-side closes
                 mt5_positions = mt5.positions_total()
             except Exception as _e:
@@ -217,6 +231,9 @@ class TradingEngine:
                     logger.warning(f"Risk alert broadcast failed: {_ne}")
 
             if not risk_eval.approved:
+                _trade_blocked = True
+                _block_reason = risk_eval.block_reason or "FTMO risk guard blocked trade"
+                _risk_warnings = list(risk_eval.warnings)
                 self.storage.log_event("risk",
                     f"Trade BLOCKED by FTMO Risk Guard: {risk_eval.block_reason}")
             else:
@@ -227,6 +244,8 @@ class TradingEngine:
                 sym_info = mt5.symbol_info(sym)
                 if sym_info is None:
                     _sym_err = f"mt5.symbol_info({sym}) returned None — is the symbol visible in MarketWatch?"
+                    _trade_blocked = True
+                    _block_reason = _sym_err
                     self.storage.log_event("risk", f"Cannot build order: {_sym_err}")
                     try:
                         from core.notifier import broadcast_risk_alert
@@ -249,6 +268,8 @@ class TradingEngine:
                     acc_info = mt5.account_info()
                     if acc_info is None:
                         _acc_err = "mt5.account_info() returned None — MT5 may not be authorized or session has expired."
+                        _trade_blocked = True
+                        _block_reason = _acc_err
                         self.storage.log_event("risk", f"Cannot build order: {_acc_err}")
                         try:
                             from core.notifier import broadcast_risk_alert
@@ -296,6 +317,8 @@ class TradingEngine:
                             # Last resort: only possible if we have less than 2 daily candles
                             # in the entire dataset — extremely unlikely but handled.
                             _adr_err = "Cannot compute ADR — not enough daily data in fetched candles."
+                            _trade_blocked = True
+                            _block_reason = _adr_err
                             self.storage.log_event("risk", f"{_adr_err} Increase bar_count in settings (>100 bars recommended).")
                             try:
                                 from core.notifier import broadcast_risk_alert
@@ -326,6 +349,8 @@ class TradingEngine:
 
                             if order is None:
                                 _order_err = f"RiskManager.build_order() returned None for {sig} {sym} — margin/leverage constraint or invalid tick data."
+                                _trade_blocked = True
+                                _block_reason = _order_err
                                 self.storage.log_event("risk", _order_err)
                                 try:
                                     from core.notifier import broadcast_risk_alert
@@ -350,35 +375,41 @@ class TradingEngine:
                                     f" | Risk=${self.risk_manager.risk_per_trade:.0f}"
                                     f" | Target=${self.risk_manager.risk_per_trade * self.risk_manager.rr_ratio:.0f}"
                                 )
-                                order_id = self.oms.submit(order)
-                                order.order_id = order_id
-                                try:
-                                    fill = self.execution.execute(order, prefs=prefs)
-                                    self.oms.update_status(order_id, "FILLED")
-                                    self.risk_manager.increment_positions()
-                                    _order = order   # expose to return dict
-                                    _fill  = fill
-
-                                    self.storage.log_event("fill", f"MT5 Fill: {fill.qty:.2f}L @ {fill.fill_price:.4f}")
-                                    self.storage.save_order(order, order_id, "FILLED")
-                                    self.storage.save_trade(fill)
-                                    self.portfolio.on_fill(fill)
-                                except Exception as _exec_err:
-                                    self.oms.update_status(order_id, "FAILED")
-                                    _exec_msg = f"MT5 order_send FAILED: {_exec_err}"
-                                    self.storage.log_event("error", _exec_msg)
+                                if self.oms.has_open_position(sym, sig):
+                                    _dup = f"OMS blocked duplicate {sig} {sym} — position already open."
+                                    _trade_blocked = True
+                                    _block_reason = _dup
+                                    self.storage.log_event("risk", _dup)
+                                else:
+                                    order_id = self.oms.submit(order)
+                                    order.order_id = order_id
                                     try:
-                                        from core.notifier import broadcast_risk_alert
-                                        broadcast_risk_alert(
-                                            alert_type="BLOCKED",
-                                            symbol=sym,
-                                            warnings=[f"EXECUTION FAILURE: {_exec_msg}"],
-                                            suggestions=["Check MT5 terminal immediately — order may NOT have been placed. Verify manually."],
-                                            prefs=prefs,
-                                            block_reason=_exec_msg,
-                                        )
-                                    except Exception as _ne:
-                                        logger.warning(f"Notifier failed on execution error: {_ne}")
+                                        fill = self.execution.execute(order, prefs=prefs)
+                                        self.oms.update_status(order_id, "FILLED")
+                                        self.risk_manager.increment_positions()
+                                        _order = order   # expose to return dict
+                                        _fill  = fill
+
+                                        self.storage.log_event("fill", f"MT5 Fill: {fill.qty:.2f}L @ {fill.fill_price:.4f}")
+                                        self.storage.save_order(order, order_id, "FILLED")
+                                        self.storage.save_trade(fill)
+                                        self.portfolio.on_fill(fill)
+                                    except Exception as _exec_err:
+                                        self.oms.mark_rejected(order_id, str(_exec_err))
+                                        _exec_msg = f"MT5 order_send FAILED: {_exec_err}"
+                                        self.storage.log_event("error", _exec_msg)
+                                        try:
+                                            from core.notifier import broadcast_risk_alert
+                                            broadcast_risk_alert(
+                                                alert_type="BLOCKED",
+                                                symbol=sym,
+                                                warnings=[f"EXECUTION FAILURE: {_exec_msg}"],
+                                                suggestions=["Check MT5 terminal immediately — order may NOT have been placed. Verify manually."],
+                                                prefs=prefs,
+                                                block_reason=_exec_msg,
+                                            )
+                                        except Exception as _ne:
+                                            logger.warning(f"Notifier failed on execution error: {_ne}")
 
         # 5. Live MT5 Account State for tick log — always read from broker, never from paper Portfolio
         current_px = df['Close'].iloc[-1]
@@ -432,5 +463,8 @@ class TradingEngine:
             "fill":  _fill,    # FillEvent or None — used by notifier
             "df": result.get("data", df) if result else df,
             "last_high": result.get('last_high', None) if result else None,
-            "last_low": result.get('last_low', None) if result else None
+            "last_low": result.get('last_low', None) if result else None,
+            "trade_blocked": _trade_blocked if sig in ("BUY", "SELL") else False,
+            "block_reason": _block_reason,
+            "risk_warnings": _risk_warnings,
         }

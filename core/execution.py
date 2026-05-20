@@ -102,23 +102,20 @@ class ExecutionEngine:
 
     def _execute_mt5(self, order: OrderEvent, prefs: dict) -> FillEvent:
         import MetaTrader5 as mt5
-        
-        mt5_path = prefs.get("mt5_path", "")
-        account = prefs.get("mt5_account", "")
-        password = prefs.get("mt5_password", "")
-        server = prefs.get("mt5_server", "")
-        
-        init_kwargs = {}
-        if mt5_path:
-            init_kwargs["path"] = mt5_path
-            
-        if not mt5.initialize(**init_kwargs):
-            raise RuntimeError(f"MT5 API: Initialization failed. {mt5.last_error()}")
-            
-        if account and password and server:
-            if not mt5.login(int(account), password=password, server=server):
-                raise RuntimeError(f"MT5 API: Login failed. {mt5.last_error()}")
-        
+        from core.mt5_connection import MT5Connection
+
+        prefs = prefs or {}
+        if not MT5Connection.connect(
+            prefs.get("mt5_account", ""),
+            prefs.get("mt5_password", ""),
+            prefs.get("mt5_server", ""),
+            prefs.get("mt5_path", ""),
+        ):
+            raise RuntimeError(f"MT5 connection failed before order execution. {mt5.last_error()}")
+
+        if not mt5.symbol_select(order.symbol, True):
+            raise RuntimeError(f"Symbol '{order.symbol}' not found or not visible in MarketWatch.")
+
         # Determine lot size
         volume = float(order.qty)
         

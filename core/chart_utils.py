@@ -26,6 +26,7 @@ def generate_trade_chart(
     plot_df = df_chart.copy() if not df_chart.empty else df_chart
 
     if not plot_df.empty:
+        plot_df.index = pd.to_datetime(plot_df.index, errors="coerce")
         # Standardize column names dynamically based on what's available
         o_col = 'Open' if 'Open' in plot_df else 'open'
         h_col = 'High' if 'High' in plot_df else 'high'

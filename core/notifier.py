@@ -9,6 +9,17 @@ import threading
 
 logger = logging.getLogger("Notifier")
 
+_THREAD_JOIN_TIMEOUT = 45  # seconds — wait for alert delivery before scheduler continues
+
+
+def _run_threads(threads: list) -> None:
+    """Start alert threads and wait (with timeout) so scheduled ticks don't drop messages."""
+    for t in threads:
+        t.daemon = False
+        t.start()
+    for t in threads:
+        t.join(timeout=_THREAD_JOIN_TIMEOUT)
+
 def send_windows_notification(title: str, message: str):
     """
     Sends a native Windows Toast notification using PowerShell.
@@ -40,30 +51,34 @@ def play_alert_sound():
 def send_telegram_alert(bot_token: str, chat_id: str, formatted_msg: str, chart_bytes: bytes = None):
     if not bot_token or not chat_id:
         return
-        
+
+    def _send_text(text: str, use_markdown: bool = True) -> bool:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": text[:4096]}
+        if use_markdown:
+            payload["parse_mode"] = "MarkdownV2"
+        resp = requests.post(url, json=payload, timeout=15)
+        if resp.status_code != 200 and use_markdown:
+            logger.warning("Telegram MarkdownV2 failed, retrying plain text: %s", resp.text[:200])
+            return _send_text(text, use_markdown=False)
+        return resp.status_code == 200
+
     try:
         if chart_bytes:
             url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-            payload = {"chat_id": chat_id, "caption": formatted_msg, "parse_mode": "MarkdownV2"}
+            payload = {"chat_id": chat_id, "caption": formatted_msg[:1024], "parse_mode": "MarkdownV2"}
             files = {"photo": ("chart.png", chart_bytes, "image/png")}
-            resp = requests.post(url, data=payload, files=files, timeout=10)
-            
-            # Fallback if caption is too long (Telegram max 1024 chars for captions)
+            resp = requests.post(url, data=payload, files=files, timeout=20)
+
             if resp.status_code != 200:
-                logger.warning(f"Telegram sendPhoto failed: {resp.text}, splitting message and chart...")
-                url_msg = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                payload_msg = {"chat_id": chat_id, "text": formatted_msg, "parse_mode": "MarkdownV2"}
-                requests.post(url_msg, json=payload_msg, timeout=5)
-                # Send photo without caption
+                logger.warning("Telegram sendPhoto failed: %s", resp.text[:200])
+                _send_text(formatted_msg)
                 payload_photo = {"chat_id": chat_id}
-                # Must recreate file pointer/bytes wrapping if reading from stream, but chart_bytes is in-memory
                 files_photo = {"photo": ("chart.png", chart_bytes, "image/png")}
-                requests.post(url, data=payload_photo, files=files_photo, timeout=10)
+                requests.post(url, data=payload_photo, files=files_photo, timeout=20)
         else:
-            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            payload = {"chat_id": chat_id, "text": formatted_msg, "parse_mode": "MarkdownV2"}
-            requests.post(url, json=payload, timeout=5)
-            
+            _send_text(formatted_msg)
+
     except Exception as e:
         logger.error(f"Telegram alert failed: {e}")
 
@@ -142,6 +157,14 @@ def _format_telegram_message(payload: dict, prefs: dict) -> str:
     if payload.get("error"):
         err = payload.get("error")
         msg += f"🚨 *ERROR:* {escape_md(err)}\n"
+
+    if payload.get("trade_blocked"):
+        msg += f"\n🚫 *Trade Blocked:* {escape_md(payload.get('block_reason', 'Risk guard'))}\n"
+        for w in payload.get("risk_warnings") or []:
+            msg += escape_md(w) + "\n"
+
+    if payload.get("fill"):
+        msg += "\n✅ *Order filled on MT5*\n"
         
     msg += f"⚡ _Trigger:_ {escape_md(trigger)}"
     
@@ -188,8 +211,30 @@ def broadcast_lts_signal(json_payload: dict, prefs: dict, chart_bytes: bytes = N
         ))
         threads.append(t)
         
-    for t in threads:
-        t.start()
+    _run_threads(threads)
+
+
+def broadcast_daemon_started(prefs: dict, schedule_count: int = 0) -> None:
+    """Notify that the background scheduler daemon is online."""
+    if not prefs.get("notify_on_scheduler_start", True):
+        return
+    sym = prefs.get("trading_symbol", "XAUUSD")
+    tf = prefs.get("timeframe", "5m")
+    warnings = [
+        "Scheduler daemon STARTED",
+        f"Symbol: {sym} | Timeframe: {tf}",
+        f"Active schedule slots: {schedule_count}",
+        "Timezone: Europe/Helsinki (FTMO chart time)",
+    ]
+    suggestions = ["Keep MT5 terminal open.", "Monitor data/events.jsonl for tick logs."]
+    broadcast_risk_alert(
+        alert_type="INFO",
+        symbol=sym,
+        warnings=warnings,
+        suggestions=suggestions,
+        prefs=prefs,
+        block_reason="Daemon online",
+    )
 
 
 def _format_risk_telegram_message(alert_type: str, symbol: str, warnings: list,
@@ -291,8 +336,7 @@ def broadcast_risk_alert(
         ))
         threads.append(t)
 
-    for t in threads:
-        t.start()
+    _run_threads(threads)
 
 
 def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"):
@@ -300,17 +344,52 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
     Takes the raw output from TradingEngine.run_pipeline_tick(), constructs the JSON payload,
     generates the static chart snapshot, and dispatches the multi-channel broadcast.
     """
+    prefs = prefs or {}
+    sym = (result or {}).get("symbol", prefs.get("trading_symbol", "UNKNOWN"))
+
     if not result:
+        broadcast_risk_alert(
+            alert_type="WARNING",
+            symbol=sym,
+            warnings=["Pipeline returned no result (empty or insufficient data)."],
+            suggestions=["Check MT5 connection and bar_count in Settings."],
+            prefs=prefs,
+            block_reason="Empty pipeline result",
+        )
+        return
+
+    if result.get("error"):
+        broadcast_risk_alert(
+            alert_type="BLOCKED",
+            symbol=sym,
+            warnings=[f"DATA / PIPELINE ERROR: {result.get('error')}"],
+            suggestions=["Verify MT5 is running and symbol is in MarketWatch."],
+            prefs=prefs,
+            block_reason=str(result.get("error")),
+        )
         return
         
     sig = result.get('signal', 'HOLD')
     ltp = result.get('ltp', 0.0)
     phase = result.get('phase', 'UNKNOWN')
-    sym = result.get('symbol', 'UNKNOWN')
     src = result.get('data_source', 'Unknown')
     order = result.get('order')
     fill = result.get('fill')
-    warnings = result.get('risk_warnings', [])
+    trade_blocked = bool(result.get("trade_blocked"))
+    block_reason = result.get("block_reason", "")
+
+    # Skip HOLD-only pings when user disabled them (signals/blocks/fills always notify)
+    notify_on_hold = prefs.get("notify_on_hold", True)
+    is_scheduled = trigger in ("LTS_AUTOMATIC", "SCHEDULER")
+    if (
+        sig == "HOLD"
+        and not fill
+        and not trade_blocked
+        and is_scheduled
+        and not notify_on_hold
+    ):
+        logger.info("Skipping HOLD notification (notify_on_hold=false).")
+        return
     
     # ── Abort Check ──
     if result.get('aborted'):
@@ -332,7 +411,11 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
         "signal": sig,
         "ltp": ltp,
         "phase": phase,
-        "source": src
+        "source": src,
+        "trade_blocked": trade_blocked,
+        "block_reason": block_reason,
+        "risk_warnings": result.get("risk_warnings", []),
+        "fill": bool(fill),
     }
     if order:
         order_event = order
@@ -358,8 +441,19 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
     if df_chart is not None and not df_chart.empty:
         try:
             import numpy as np
+            import pandas as pd
             from core.chart_utils import generate_trade_chart
-            
+
+            safe_cols = [
+                c for c in (
+                    "Open", "High", "Low", "Close", "Volume",
+                    "EMA_Fast", "EMA_Slow", "fast_ema", "slow_ema",
+                )
+                if c in df_chart.columns
+            ]
+            df_chart = df_chart[safe_cols].copy() if safe_cols else df_chart.copy()
+            df_chart.index = pd.to_datetime(df_chart.index, errors="coerce").astype(str)
+
             fig = generate_trade_chart(
                 df_chart=df_chart,
                 selected_asset_name=sym,
@@ -370,9 +464,9 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
                 last_low=result.get('last_low', np.nan),
                 dark_mode=True
             )
-            chart_bytes = fig.to_image(format="png")
+            chart_bytes = fig.to_image(format="png", engine="kaleido")
         except Exception as e:
-            logger.error(f"Chart generation failed: {e}")
+            logger.warning(f"Chart generation failed (install kaleido): {e}")
         
     # ── Dispatch ──
     broadcast_lts_signal(json_payload, prefs, chart_bytes)

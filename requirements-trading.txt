@@ -1,0 +1,10 @@
+# Minimal dependencies for Trade Pulse Quants (MT5 + Streamlit)
+streamlit>=1.54.0
+pandas>=2.0.0
+numpy>=1.24.0
+MetaTrader5>=5.0.45
+plotly>=5.18.0
+kaleido>=0.2.1
+requests>=2.31.0
+pytz>=2024.1
+pyotp>=2.9.0

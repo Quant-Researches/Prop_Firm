@@ -17,7 +17,9 @@ Responsibilities:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
+import json
 import uuid
 import logging
 
@@ -60,7 +62,8 @@ class OMS:
     Order Management System.
 
     Stores all orders in-memory during the bot session.
-    All orders are lost on restart (persistent storage is handled by Storage).
+    On startup, syncs with live MT5 positions so that post-restart duplicate
+    checks and position counters reflect reality.
 
     Lifecycle:
         submit()        -> SUBMITTED
@@ -71,6 +74,66 @@ class OMS:
     def __init__(self, mode: str = "live"):
         self.mode = mode
         self._orders: dict[str, ManagedOrder] = {}   # order_id -> ManagedOrder
+        self._sync_with_mt5()   # pre-populate from any open MT5 positions
+
+    @staticmethod
+    def _load_mt5_prefs() -> dict:
+        prefs_path = Path(__file__).resolve().parent.parent / "config" / "user_prefs.json"
+        if prefs_path.exists():
+            try:
+                return json.loads(prefs_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        return {}
+
+    def _sync_with_mt5(self) -> None:
+        """
+        Query mt5.positions_get() on startup and create synthetic FILLED
+        ManagedOrder entries for each open position.
+        This prevents the OMS from allowing a second trade in the same
+        direction after a bot restart when a position is already live in MT5.
+        """
+        try:
+            import MetaTrader5 as mt5
+            from core.mt5_connection import MT5Connection
+
+            prefs = self._load_mt5_prefs()
+            if prefs.get("mt5_account") and prefs.get("mt5_password") and prefs.get("mt5_server"):
+                MT5Connection.connect(
+                    prefs.get("mt5_account", ""),
+                    prefs.get("mt5_password", ""),
+                    prefs.get("mt5_server", ""),
+                    prefs.get("mt5_path", ""),
+                )
+
+            positions = mt5.positions_get()
+            if not positions:
+                return
+            for pos in positions:
+                side  = "BUY" if pos.type == 0 else "SELL"  # 0=BUY, 1=SELL in MT5
+                order_id = f"MT5-{pos.ticket}"
+                synth_order = OrderEvent(
+                    symbol=pos.symbol,
+                    side=side,
+                    qty=pos.volume,
+                    order_type="MARKET",
+                    limit_price=pos.price_open,
+                    stop_loss=pos.sl if pos.sl else None,
+                    take_profit=pos.tp if pos.tp else None,
+                )
+                managed = ManagedOrder(
+                    order_id=order_id,
+                    order=synth_order,
+                    status="FILLED",
+                    broker_order_id=str(pos.ticket),
+                )
+                self._orders[order_id] = managed
+                logger.info(
+                    f"OMS startup sync: imported MT5 position {pos.ticket} "
+                    f"| {side} {pos.volume}L {pos.symbol} @ {pos.price_open} as FILLED."
+                )
+        except Exception as e:
+            logger.warning(f"OMS startup sync failed (MT5 not ready): {e}")
 
     # -------------------------------------------------------------------------
     # Core Interface
@@ -87,10 +150,10 @@ class OMS:
 
         Returns the internal order_id string.
         """
-        # --- Duplicate check ---
+        # --- Duplicate check (includes FILLED from MT5 startup sync) ---
         for managed in self._orders.values():
             if (
-                managed.status in ("PENDING", "SUBMITTED")
+                managed.status in ("PENDING", "SUBMITTED", "FILLED")
                 and managed.order.symbol == order.symbol
                 and managed.order.side == order.side
             ):
@@ -233,11 +296,28 @@ class OMS:
         return [o for o in self._orders.values() if o.status == "CANCELLED"]
 
     def has_open_position(self, symbol: str, side: str) -> bool:
-        """Returns True if there is already a PENDING/SUBMITTED order for this symbol+side."""
-        return any(
+        """Returns True if there is already a PENDING/SUBMITTED/FILLED order for this symbol+side.
+        Checks both OMS book AND live MT5 positions to handle any sync gaps.
+        """
+        # 1. Check OMS book (covers PENDING/SUBMITTED)
+        oms_open = any(
             o.order.symbol == symbol and o.order.side == side
             for o in self.get_open_orders()
         )
+        if oms_open:
+            return True
+        # 2. Check live MT5 positions (handles restarts and manual closes)
+        try:
+            import MetaTrader5 as mt5
+            positions = mt5.positions_get(symbol=symbol)
+            if positions:
+                mt5_side_map = {0: "BUY", 1: "SELL"}
+                for p in positions:
+                    if mt5_side_map.get(p.type) == side:
+                        return True
+        except Exception:
+            pass
+        return False
 
     def summary(self) -> dict:
         return {

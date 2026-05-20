@@ -52,6 +52,7 @@ EVENT_TEMPLATES = {
     "signal":  ("🎯", "ev-signal",  "SignalEvent"),
     "order":   ("📋", "ev-order",   "OrderEvent"),
     "fill":    ("✅", "ev-fill",    "FillEvent"),
+    "bot":     ("🤖", "ev-signal",  "BOT"),
     "info":    ("ℹ️", "ev-info",    "INFO"),
 }
 
@@ -116,6 +117,14 @@ def _load_live_state():
             st.session_state._mt5_leverage   = acc.leverage
             st.session_state._mt5_currency   = acc.currency
             st.session_state._mt5_connected  = True
+            # Auto-initialize SOD balance from live MT5 balance if not set
+            if "ftmo_sod_balance" not in prefs:
+                prefs["ftmo_sod_balance"] = float(acc.balance)
+                try:
+                    _PREFS_FILE.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+                except:
+                    pass
+                st.session_state.sod_balance = float(acc.balance)
         else:
             st.session_state._mt5_connected = False
     else:
@@ -222,19 +231,48 @@ st.markdown(pipeline_html, unsafe_allow_html=True)
 # ── Control Panel ─────────────────────────────────────────────────────────────
 st.markdown('<div class="section-label">🎛️ Bot Controls</div>', unsafe_allow_html=True)
 
+from core.bot_lifecycle import get_bot_state as _get_bot_state
+_daemon_running = _get_bot_state().get("daemon", {}).get("running") is True
+
+st.warning(
+    "**Start Bot** only updates this dashboard — it does **not** run scheduled trades.\n\n"
+    "For automatic runs at each **candle close (FTMO time)**, keep this running in another terminal:\n\n"
+    "`python main.py`  or  **`run_daemon.bat`**\n\n"
+    f"Daemon now: **{'🟢 RUNNING' if _daemon_running else '🔴 NOT RUNNING'}**"
+)
+
 col_start, col_stop, col_restart, col_status, col_uptime = st.columns([1, 1, 1, 2, 1.5])
 
 with col_start:
     if st.button("▶  Start Bot", use_container_width=True, disabled=st.session_state.bot_running):
+        from core.bot_lifecycle import log_bot_started
         st.session_state.bot_running = True
         st.session_state.start_time  = datetime.now()
-        _add_event("info", f"Bot STARTED · mode={st.session_state.bot_mode} · tf={st.session_state.timeframe}")
+        log_bot_started(
+            "dashboard",
+            mode=st.session_state.bot_mode,
+            symbol=st.session_state.get("trading_symbol", _USER_PREFS.get("trading_symbol", "")),
+            timeframe=st.session_state.timeframe,
+        )
+        _add_event("bot", f"Bot STARTED · mode={st.session_state.bot_mode} · tf={st.session_state.timeframe}")
+        send_windows_notification(
+            "Trade Pulse — Bot Started",
+            f"{st.session_state.get('trading_symbol', '—')} · {st.session_state.timeframe} · {st.session_state.bot_mode}",
+        )
         st.rerun()
 
 with col_stop:
     if st.button("⏹  Stop Bot", use_container_width=True, disabled=not st.session_state.bot_running):
+        from core.bot_lifecycle import log_bot_stopped
+        uptime = _format_uptime()
+        log_bot_stopped("dashboard", reason="user_stop_button")
         st.session_state.bot_running = False
-        _add_event("info", "Bot STOPPED · all positions maintained")
+        st.session_state.start_time = None
+        _add_event("bot", f"Bot STOPPED · uptime={uptime} · positions maintained on MT5")
+        send_windows_notification(
+            "Trade Pulse — Bot Stopped",
+            f"Session uptime {uptime}. Open MT5 positions unchanged.",
+        )
         st.rerun()
 
 with col_restart:
@@ -265,10 +303,15 @@ with col_restart:
                             st.error(f"🚨 TRADE ABORTED: {abort_reason}")
                             for w in result.get('risk_warnings', []):
                                 st.warning(w)
-                            for w in result.get('risk_warnings', []):
-                                st.warning(w)
-                            
-                            st.toast(f"LTS Success: {sig} @ {ltp} ({src})", icon="🚀")
+                        else:
+                            sig = result.get('signal', 'HOLD')
+                            ltp = result.get('ltp', 0)
+                            src = result.get('data_source', 'MT5')
+                            st.success(
+                                f"Pipeline complete: {sig} | Phase: {result.get('phase', '')} "
+                                f"| {result.get('candles_fetched', 0)} candles"
+                            )
+                            st.toast(f"LTS: {sig} @ {ltp:,.2f} ({src})", icon="🚀")
                 else:
                     st.error("LTS Failed silently: Empty response or bad data format.")
             except Exception as e:
@@ -430,6 +473,163 @@ with cfg_col:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+
+st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div class="section-label">📊 Storage & Execution Dashboard</div>', unsafe_allow_html=True)
+
+# Load data files
+trades_data = _storage.load_trades()
+orders_data = _storage.load_orders()
+pnl_data = _storage.load_pnl_history()
+
+# Setup tabs
+tab_pnl, tab_trades, tab_orders = st.tabs([
+    "💵 PnL & Equity History",
+    f"✅ Filled Trades ({len(trades_data)})",
+    f"📋 Submitted Orders ({len(orders_data)})"
+])
+
+with tab_pnl:
+    if pnl_data:
+        import pandas as pd
+        df_pnl = pd.DataFrame(pnl_data)
+        try:
+            df_pnl['timestamp'] = pd.to_datetime(df_pnl['timestamp'])
+            df_pnl = df_pnl.sort_values('timestamp')
+        except Exception:
+            pass
+        
+        # Display small stat metrics
+        c_eq, c_rel, c_unrel, c_tot = st.columns(4)
+        latest_pnl = pnl_data[-1]
+        c_eq.metric("Latest Equity", f"${latest_pnl.get('equity', 0.0):,.2f}")
+        c_rel.metric("Realised PnL", f"${latest_pnl.get('realised_pnl', 0.0):+,.2f}")
+        c_unrel.metric("Unrealised PnL", f"${latest_pnl.get('unrealised_pnl', 0.0):+,.2f}")
+        c_tot.metric("Total Trades Logged", str(latest_pnl.get('total_trades', 0)))
+
+        # Plot equity curve
+        chart_data = df_pnl[['timestamp', 'equity']].copy()
+        chart_data = chart_data.set_index('timestamp')
+        st.line_chart(chart_data)
+
+        # Render recent rows
+        st.markdown('<div class="sb-label">Recent PnL Snapshots (Saved to CSV)</div>', unsafe_allow_html=True)
+        html_pnl = """<table class="tpq-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Equity</th>
+                    <th>Cash</th>
+                    <th>Realised PnL</th>
+                    <th>Unrealised PnL</th>
+                    <th>Open Pos</th>
+                    <th>Trades</th>
+                </tr>
+            </thead>
+            <tbody>"""
+        for row in reversed(pnl_data[-10:]):
+            try:
+                ts_str = pd.to_datetime(row.get('timestamp')).strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                ts_str = str(row.get('timestamp'))
+            pnl_color_class = "delta-pos" if row.get("unrealised_pnl", 0.0) >= 0 else "delta-neg"
+            rel_color_class = "delta-pos" if row.get("realised_pnl", 0.0) >= 0 else "delta-neg"
+            html_pnl += f"""
+                <tr>
+                    <td>{ts_str}</td>
+                    <td>${row.get('equity', 0.0):,.2f}</td>
+                    <td>${row.get('cash', 0.0):,.2f}</td>
+                    <td class="{rel_color_class}">${row.get('realised_pnl', 0.0):+,.2f}</td>
+                    <td class="{pnl_color_class}">${row.get('unrealised_pnl', 0.0):+,.2f}</td>
+                    <td>{row.get('open_positions', 0)}</td>
+                    <td>{row.get('total_trades', 0)}</td>
+                </tr>"""
+        html_pnl += "</tbody></table>"
+        st.markdown(html_pnl, unsafe_allow_html=True)
+    else:
+        st.info("No PnL history snapshots recorded yet in pnl_history.csv.")
+
+with tab_trades:
+    if trades_data:
+        html_trades = """<table class="tpq-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Order ID</th>
+                    <th>Symbol</th>
+                    <th>Side</th>
+                    <th>Qty (Lots)</th>
+                    <th>Price</th>
+                    <th>Slippage</th>
+                    <th>Commission</th>
+                </tr>
+            </thead>
+            <tbody>"""
+        for t in reversed(trades_data[-15:]):
+            side_badge = "tbl-badge-buy" if t.get("side") == "BUY" else "tbl-badge-sell"
+            try:
+                t_str = pd.to_datetime(t.get('timestamp')).strftime('%m-%d %H:%M:%S')
+            except:
+                t_str = str(t.get('timestamp'))
+            html_trades += f"""
+                <tr>
+                    <td>{t_str}</td>
+                    <td><code>{t.get('order_id')}</code></td>
+                    <td>{t.get('symbol')}</td>
+                    <td><span class="tpq-tbl-badge {side_badge}">{t.get('side')}</span></td>
+                    <td>{t.get('qty', 0.0):.2f}</td>
+                    <td>${t.get('fill_price', 0.0):,.2f}</td>
+                    <td>${t.get('slippage', 0.0):.2f}</td>
+                    <td>${t.get('commission', 0.0):.2f}</td>
+                </tr>"""
+        html_trades += "</tbody></table>"
+        st.markdown(html_trades, unsafe_allow_html=True)
+    else:
+        st.info("No filled trades logged yet in trades.json.")
+
+with tab_orders:
+    if orders_data:
+        html_orders = """<table class="tpq-table">
+            <thead>
+                <tr>
+                    <th>Created Time</th>
+                    <th>Order ID</th>
+                    <th>Symbol</th>
+                    <th>Side</th>
+                    <th>Qty (Lots)</th>
+                    <th>SL</th>
+                    <th>TP</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>"""
+        for o in reversed(orders_data[-15:]):
+            ord_info = o.get("order", {})
+            status_val = o.get("status", "SUBMITTED").upper()
+            status_badge = f"tbl-badge-{status_val.lower()}"
+            side_badge = "tbl-badge-buy" if ord_info.get("side") == "BUY" else "tbl-badge-sell"
+            try:
+                t_str = pd.to_datetime(o.get('created_at')).strftime('%m-%d %H:%M:%S')
+            except:
+                t_str = str(o.get('created_at'))
+            sl_val = f"${ord_info.get('stop_loss', 0.0):,.2f}" if ord_info.get('stop_loss') else "N/A"
+            tp_val = f"${ord_info.get('take_profit', 0.0):,.2f}" if ord_info.get('take_profit') else "N/A"
+            html_orders += f"""
+                <tr>
+                    <td>{t_str}</td>
+                    <td><code>{o.get('order_id')}</code></td>
+                    <td>{ord_info.get('symbol')}</td>
+                    <td><span class="tpq-tbl-badge {side_badge}">{ord_info.get('side')}</span></td>
+                    <td>{ord_info.get('qty', 0.0):.2f}</td>
+                    <td>{sl_val}</td>
+                    <td>{tp_val}</td>
+                    <td><span class="tpq-tbl-badge {status_badge}">{status_val}</span></td>
+                </tr>"""
+        html_orders += "</tbody></table>"
+        st.markdown(html_orders, unsafe_allow_html=True)
+    else:
+        st.info("No orders logged yet in orders.json.")
 
 
 # ── Auto-refresh always (pulls live MT5 equity on each cycle) ─────────────────

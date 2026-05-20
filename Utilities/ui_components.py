@@ -360,6 +360,49 @@ header[data-testid="stHeader"] {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #0a0e1a; }
 ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+
+/* ── Custom Tables & Badges ── */
+.tpq-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin: 12px 0;
+    background: #0d1225;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.tpq-table th {
+    background: #111827;
+    color: #94a3b8;
+    font-weight: 600;
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid #1e293b;
+}
+.tpq-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #161e31;
+    color: #cbd5e1;
+}
+.tpq-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+.tpq-tbl-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    display: inline-block;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+.tbl-badge-buy      { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.2); }
+.tbl-badge-sell     { background: rgba(239,68,68,0.12);  color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+.tbl-badge-filled   { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.2); }
+.tbl-badge-submitted{ background: rgba(56,189,248,0.12);  color: #38bdf8; border: 1px solid rgba(56,189,248,0.2); }
+.tbl-badge-rejected { background: rgba(239,68,68,0.12);  color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+.tbl-badge-cancelled{ background: rgba(100,116,139,0.12); color: #94a3b8; border: 1px solid rgba(100,116,139,0.2); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -420,6 +463,8 @@ def init_session_state():
         "alert_email":     bool(user_prefs.get("alert_email", True)),
         "alert_sound":     bool(user_prefs.get("alert_sound", True)),
         "alert_desktop":   bool(user_prefs.get("alert_desktop", True)),
+        "notify_on_hold":  bool(user_prefs.get("notify_on_hold", True)),
+        "notify_on_scheduler_start": bool(user_prefs.get("notify_on_scheduler_start", True)),
         "execution_mode":  "MetaTrader5",
         "daily_reset_time": user_prefs.get("daily_reset_time", "00:00"),
     }

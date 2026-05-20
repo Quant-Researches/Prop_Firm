@@ -54,33 +54,32 @@ class Storage:
 
     def __init__(
         self,
-        execution_mode: str = "JSON Only",
+        execution_mode: str = "MetaTrader5",
         trades_file: str = DEFAULT_TRADES_FILE,
         orders_file: str = DEFAULT_ORDERS_FILE,
         pnl_file: str = DEFAULT_PNL_FILE,
         events_file: str = DEFAULT_EVENTS_FILE,
     ):
         self.execution_mode = execution_mode
-        self.base_dir = Path("data/live") if execution_mode == "Dhan Realtime" else Path("data")
-        
-        self.events_path  = Path(events_file) # Events shared for unified logging, but backend routes appropriately
+        self.base_dir = Path("data")
+
+        self.events_path      = Path(events_file)
         self.trades_file_name = Path(trades_file).name
         self.orders_file_name = Path(orders_file).name
-        self.pnl_file_name = Path(pnl_file).name
-        
-        self.trades_path = None
-        self.orders_path = None
-        self.pnl_path = None
-        
-        self.set_execution_mode(execution_mode)
+        self.pnl_file_name    = Path(pnl_file).name
+
+        self.trades_path = self.base_dir / self.trades_file_name
+        self.orders_path = self.base_dir / self.orders_file_name
+        self.pnl_path    = self.base_dir / self.pnl_file_name
+        self._ensure_dirs()
 
     def set_execution_mode(self, mode: str) -> None:
-        """Update paths dynamically if execution mode changes."""
+        """Update execution mode label (paths are always data/ for MT5 live trading)."""
         self.execution_mode = mode
-        self.base_dir = Path("data/live") if mode == "Dhan Realtime" else Path("data")
-        self.trades_path  = self.base_dir / self.trades_file_name
-        self.orders_path  = self.base_dir / self.orders_file_name
-        self.pnl_path     = self.base_dir / self.pnl_file_name
+        # Paths are fixed to data/ — Dhan routing removed
+        self.trades_path = self.base_dir / self.trades_file_name
+        self.orders_path = self.base_dir / self.orders_file_name
+        self.pnl_path    = self.base_dir / self.pnl_file_name
         self._ensure_dirs()
 
     # ------------------------------------------------------------------
