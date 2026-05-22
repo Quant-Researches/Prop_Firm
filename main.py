@@ -42,17 +42,32 @@ logger = logging.getLogger("Daemon")
 SCHEDULES_PATH = ROOT / "schedules.json"
 
 
+_cached_schedules = None
+_last_schedules_mtime = 0.0
+
 def load_schedules() -> list[dict]:
+    global _cached_schedules, _last_schedules_mtime
     if SCHEDULES_PATH.exists():
         try:
-            return json.loads(SCHEDULES_PATH.read_text(encoding="utf-8"))
+            mtime = os.path.getmtime(SCHEDULES_PATH)
+            if _cached_schedules is not None and mtime == _last_schedules_mtime:
+                return _cached_schedules
+            _cached_schedules = json.loads(SCHEDULES_PATH.read_text(encoding="utf-8"))
+            _last_schedules_mtime = mtime
+            return _cached_schedules
         except Exception as e:
             logger.error("Failed to load schedules.json: %s", e)
     return []
 
 
 def save_schedules(schedules: list[dict]) -> None:
+    global _cached_schedules, _last_schedules_mtime
     SCHEDULES_PATH.write_text(json.dumps(schedules, indent=2), encoding="utf-8")
+    _cached_schedules = schedules
+    try:
+        _last_schedules_mtime = os.path.getmtime(SCHEDULES_PATH)
+    except Exception:
+        pass
 
 
 def mark_schedule_run(day: str, time_str: str) -> None:
@@ -69,18 +84,34 @@ def mark_schedule_run(day: str, time_str: str) -> None:
         save_schedules(scheds)
 
 
+def ensure_mt5_connected(prefs: dict) -> None:
+    import MetaTrader5 as mt5
+    from core.mt5_connection import MT5Connection
+    
+    if not mt5.terminal_info():
+        logger.warning("MT5 disconnected mid-day! Attempting auto-recovery...")
+        if MT5Connection.connect(
+            prefs.get("mt5_account", ""),
+            prefs.get("mt5_password", ""),
+            prefs.get("mt5_server", ""),
+            prefs.get("mt5_path", ""),
+        ):
+            logger.info("MT5 auto-recovery successful.")
+        else:
+            logger.error(f"MT5 auto-recovery failed: {mt5.last_error()}")
+
+
 def run_scheduled_tick(engine: TradingEngine, prefs: dict, day: str, time_str: str) -> None:
     """Execute one pipeline tick and send notifications."""
     from core.notifier import process_and_broadcast
+
+    ensure_mt5_connected(prefs)
 
     logger.info("Scheduler firing: %s %s (FTMO candle close)", day, time_str)
     engine.storage.log_event(
         "info",
         f"Candle close → pipeline start: {day} {time_str} (FTMO)",
     )
-
-    # Brief delay so MT5 has finished writing the closed bar to history
-    time.sleep(3)
 
     try:
         result = engine.run_pipeline_tick(is_manual=False)

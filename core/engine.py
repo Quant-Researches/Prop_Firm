@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 import pandas as pd
+import numpy as np
 import MetaTrader5 as mt5
 
 from core.strategy import RealTimeSignalGenerator
@@ -295,56 +296,48 @@ class TradingEngine:
                             f" | contract_size={contract_size:.0f}"
                         )
 
-                        # --- Calculate ADR from the already-fetched OHLCV data ---
-                        # Resample to daily candles — no extra API call needed.
-                        adr = 0.0
-                        try:
-                            df_d = df.copy()
-                            if not isinstance(df_d.index, pd.DatetimeIndex):
-                                df_d.index = pd.to_datetime(df_d.index)
-                            daily = df_d.resample("D").agg({"High": "max", "Low": "min"}).dropna()
-                            if len(daily) >= 2:
-                                adr = (daily["High"] - daily["Low"]).tail(14).mean()
-                                self.storage.log_event(
-                                    "info",
-                                    f"ADR (14-day avg daily range): {adr:.5f}"
-                                    f" | SL will be {adr * 0.15:.5f} (15% of ADR)"
-                                )
-                        except Exception as _e:
-                            logger.warning(f"ADR resampling failed: {_e}")
+                        # --- Extract Strategy Metrics & Live Spread ---
+                        tick = mt5.symbol_info_tick(sym)
+                        live_spread = (tick.ask - tick.bid) if tick else 0.0
 
-                        if adr <= 0:
-                            # Last resort: only possible if we have less than 2 daily candles
-                            # in the entire dataset — extremely unlikely but handled.
-                            _adr_err = "Cannot compute ADR — not enough daily data in fetched candles."
+                        last_high = result.get('last_high', np.nan) if result else np.nan
+                        last_low  = result.get('last_low', np.nan) if result else np.nan
+                        atr_val   = result.get('atr', close_px * 0.005) if result else (close_px * 0.005)
+                        atr_pct   = result.get('atr_percentile', 0.5) if result else 0.5
+
+                        if pd.isna(atr_val) or atr_val <= 0:
+                            _atr_err = "Cannot build order: Invalid ATR value."
                             _trade_blocked = True
-                            _block_reason = _adr_err
-                            self.storage.log_event("risk", f"{_adr_err} Increase bar_count in settings (>100 bars recommended).")
+                            _block_reason = _atr_err
+                            self.storage.log_event("risk", _atr_err)
                             try:
                                 from core.notifier import broadcast_risk_alert
                                 broadcast_risk_alert(
                                     alert_type="BLOCKED",
                                     symbol=sym,
-                                    warnings=[f"ADR COMPUTATION FAILED: {_adr_err}"],
-                                    suggestions=["Increase bar_count to >100 in Settings to ensure sufficient daily data."],
+                                    warnings=[f"ATR COMPUTATION FAILED: {_atr_err}"],
+                                    suggestions=["Check strategy indicators."],
                                     prefs=prefs,
-                                    block_reason=_adr_err,
+                                    block_reason=_atr_err,
                                 )
                             except Exception as _ne:
-                                logger.warning(f"Notifier failed on ADR error: {_ne}")
+                                logger.warning(f"Notifier failed on ATR error: {_ne}")
                         else:
-                            # --- Build the order ---
+                            # --- Build the order via Quantitative Risk Engine ---
                             order = self.risk_manager.build_order(
                                 signal=sig,
                                 symbol=sym,
                                 close_price=close_px,
-                                adr=adr,
+                                atr=atr_val,
+                                atr_percentile=atr_pct,
+                                last_high=last_high,
+                                last_low=last_low,
+                                live_spread=live_spread,
                                 tick_size=tick_size,
                                 tick_value=tick_value,
                                 leverage=leverage,
                                 free_margin=free_margin,
                                 contract_size=contract_size,
-                                adr_fraction=0.15,
                             )
 
                             if order is None:
@@ -371,7 +364,7 @@ class TradingEngine:
                                     f" | Entry~{close_px:.4f}"
                                     f" | SL={order.stop_loss:.4f} TP={order.take_profit:.4f}"
                                     f" | R:R=1:{order.rr_ratio}"
-                                    f" | ADR={adr:.4f} | Leverage=1:{leverage}"
+                                    f" | ATR={atr_val:.4f} | Leverage=1:{leverage}"
                                     f" | Risk=${self.risk_manager.risk_per_trade:.0f}"
                                     f" | Target=${self.risk_manager.risk_per_trade * self.risk_manager.rr_ratio:.0f}"
                                 )

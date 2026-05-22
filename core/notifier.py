@@ -13,12 +13,10 @@ _THREAD_JOIN_TIMEOUT = 45  # seconds — wait for alert delivery before schedule
 
 
 def _run_threads(threads: list) -> None:
-    """Start alert threads and wait (with timeout) so scheduled ticks don't drop messages."""
+    """Start alert threads and let them run in the background without blocking."""
     for t in threads:
-        t.daemon = False
+        t.daemon = True
         t.start()
-    for t in threads:
-        t.join(timeout=_THREAD_JOIN_TIMEOUT)
 
 def send_windows_notification(title: str, message: str):
     """
@@ -441,32 +439,19 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
     if df_chart is not None and not df_chart.empty:
         try:
             import numpy as np
-            import pandas as pd
-            from core.chart_utils import generate_trade_chart
+            from core.chart_utils import generate_static_trade_chart
 
-            safe_cols = [
-                c for c in (
-                    "Open", "High", "Low", "Close", "Volume",
-                    "EMA_Fast", "EMA_Slow", "fast_ema", "slow_ema",
-                )
-                if c in df_chart.columns
-            ]
-            df_chart = df_chart[safe_cols].copy() if safe_cols else df_chart.copy()
-            df_chart.index = pd.to_datetime(df_chart.index, errors="coerce").astype(str)
-
-            fig = generate_trade_chart(
+            chart_bytes = generate_static_trade_chart(
                 df_chart=df_chart,
                 selected_asset_name=sym,
                 selected_timeframe=prefs.get('timeframe', '5m'),
                 ema_fast=prefs.get('ema_fast', 3),
                 ema_slow=prefs.get('ema_slow', 8),
                 last_high=result.get('last_high', np.nan),
-                last_low=result.get('last_low', np.nan),
-                dark_mode=True
+                last_low=result.get('last_low', np.nan)
             )
-            chart_bytes = fig.to_image(format="png", engine="kaleido")
         except Exception as e:
-            logger.warning(f"Chart generation failed (install kaleido): {e}")
+            logger.warning(f"Static chart generation failed: {e}")
         
     # ── Dispatch ──
     broadcast_lts_signal(json_payload, prefs, chart_bytes)

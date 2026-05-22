@@ -204,6 +204,9 @@ class RealTimeSignalGenerator:
         # Negative  → volatility is contracting (choppy / exhaustion move)
         df['ATR_Slope'] = df['ATR'].diff()
         
+        # ATR Percentile (200 periods) to classify volatility regimes (0.0 to 1.0)
+        df['ATR_Percentile'] = df['ATR'].rolling(window=200, min_periods=20).apply(lambda x: (x <= x[-1]).mean(), raw=True)
+        
         self.data = df
 
     def _find_and_set_swings_fractal(self):
@@ -485,5 +488,7 @@ class RealTimeSignalGenerator:
             "last_high": latest_row.get('Last_High', np.nan),
             "last_low": latest_row.get('Last_Low', np.nan),
             "fast_ema": latest_row['fast_ema'],
-            "slow_ema": latest_row['slow_ema']
+            "slow_ema": latest_row['slow_ema'],
+            "atr": latest_row.get('ATR', np.nan),
+            "atr_percentile": latest_row.get('ATR_Percentile', np.nan)
         }

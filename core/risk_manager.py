@@ -425,95 +425,123 @@ class RiskManager:
     # PART 2: Order Builder (ADR-based SL + Leverage Check)
     # -------------------------------------------------------------------------
 
+    def _classify_volatility(self, atr_percentile: float) -> float:
+        """Returns the ATR multiplier based on volatility regime."""
+        if atr_percentile < 0.30:
+            return 1.2  # Low volatility
+        elif atr_percentile <= 0.70:
+            return 1.5  # Normal volatility
+        else:
+            return 1.8  # High volatility
+
     def build_order(
         self,
         signal: str,
         symbol: str,
         close_price: float,
-        adr: float,
+        atr: float,
+        atr_percentile: float,
+        last_high: float,
+        last_low: float,
+        live_spread: float,
         tick_size: float,
         tick_value: float,
         leverage: int = 100,
         free_margin: float = 0.0,
         contract_size: float = 100_000.0,
-        adr_fraction: float = 0.15,
     ) -> Optional[OrderEvent]:
         """
-        Builds a fully sized OrderEvent.
-
-        SL = ADR x 15%  (Average Daily Range - symbol-agnostic)
-        TP = SL x rr_ratio  (default 1:2 = $200 target)
-        Lots = risk_per_trade / (sl_ticks x tick_value)
-        Leverage check: scales lots down if margin_needed > 30% of free_margin.
+        Builds a fully sized OrderEvent using quantitative ATR logic.
+        Enforces EXACTLY $100 risk and 1:2 R:R ($200 target).
         """
         if signal not in ("BUY", "SELL"):
-            logger.error("build_order: invalid signal " + repr(signal))
+            logger.error(f"build_order: invalid signal {repr(signal)}")
             return None
-        if adr <= 0 or tick_size <= 0 or tick_value <= 0:
-            logger.error("build_order: invalid data adr=" + str(adr)
-                + " tick_size=" + str(tick_size) + " tick_value=" + str(tick_value))
+        if atr <= 0 or tick_size <= 0 or tick_value <= 0:
+            logger.error(f"build_order: invalid data atr={atr} tick_size={tick_size} tick_value={tick_value}")
             return None
 
-        # Step 1: SL distance = fraction of ADR
-        sl_distance = adr * adr_fraction
+        # --- Professional Validation Filters ---
+        # 1. Spread Sanity Check
+        max_allowed_spread = atr * 0.10
+        if live_spread > max_allowed_spread:
+            logger.warning(f"TRADE BLOCKED: Spread ({live_spread:.5f}) too high for current ATR ({atr:.5f}). Max allowed: {max_allowed_spread:.5f}")
+            return None
+
+        # --- Volatility Regime Logic ---
+        atr_multiplier = self._classify_volatility(atr_percentile)
+        atr_stop_distance = atr * atr_multiplier
+
+        # --- Structure-Aware SL Validator ---
+        structure_stop_distance = 0.0
+        if signal == "BUY" and last_low and last_low > 0:
+            structure_stop_distance = max(0.0, close_price - last_low)
+        elif signal == "SELL" and last_high and last_high > 0:
+            structure_stop_distance = max(0.0, last_high - close_price)
+
+        final_sl_distance = max(atr_stop_distance, structure_stop_distance)
+
+        # 2. Minimum/Maximum SL Bounds
         min_sl = tick_size * 5
-        if sl_distance < min_sl:
-            sl_distance = min_sl
-            logger.warning("build_order: ADR SL below 5-tick floor. Using " + str(min_sl))
+        max_sl = close_price * 0.05  # Sanity check: don't allow a 5% stop loss
+        if final_sl_distance < min_sl:
+            final_sl_distance = min_sl
+            logger.warning(f"build_order: SL below 5-tick floor. Adjusted to {min_sl}")
+        if final_sl_distance > max_sl:
+            logger.warning(f"TRADE BLOCKED: SL distance ({final_sl_distance:.5f}) exceeds extreme maximum ({max_sl:.5f}).")
+            return None
 
-        # Step 2: TP = SL x rr_ratio (default 1:2)
-        tp_distance = sl_distance * self.rr_ratio
+        # --- Take Profit Engine ---
+        # Fixed 1:2 R:R
+        tp_distance = final_sl_distance * self.rr_ratio
 
-        # Step 3: Price levels
+        # --- Price Levels ---
         if signal == "BUY":
-            sl = close_price - sl_distance
+            sl = close_price - final_sl_distance
             tp = close_price + tp_distance
         else:
-            sl = close_price + sl_distance
+            sl = close_price + final_sl_distance
             tp = close_price - tp_distance
 
-        # Step 4: Lot size for exactly risk_per_trade dollars
-        sl_ticks     = sl_distance / tick_size
-        tp_ticks     = tp_distance / tick_size
+        # --- Position Sizing Engine ---
+        sl_ticks = final_sl_distance / tick_size
+        tp_ticks = tp_distance / tick_size
         risk_per_lot = sl_ticks * tick_value
+        
         if risk_per_lot <= 0:
-            logger.error("build_order: risk_per_lot=" + str(risk_per_lot))
+            logger.error(f"build_order: invalid risk_per_lot={risk_per_lot}")
             return None
 
-        lots        = self.risk_per_trade / risk_per_lot
-        lots        = max(0.01, round(lots, 2))
-        actual_risk = self.risk_per_trade
-
-        # Step 5: Leverage / Margin Check
+        # position_size = risk_amount / (stop_loss_pips * pip_value)
+        lots = self.risk_per_trade / risk_per_lot
+        lots = max(0.01, round(lots, 2))
+        
+        # --- Leverage Protection ---
         if free_margin > 0 and leverage > 0 and contract_size > 0:
             margin_needed = (lots * contract_size * close_price) / leverage
-            margin_cap    = free_margin * 0.30
+            margin_cap = free_margin * 0.30
             if margin_needed > margin_cap:
                 max_lots = (margin_cap * leverage) / (contract_size * close_price)
                 max_lots = max(0.01, round(max_lots, 2))
                 if max_lots < lots:
-                    actual_risk = max_lots * risk_per_lot
-                    logger.warning("LEVERAGE CONSTRAINT " + symbol
-                        + ": margin needed " + str(round(margin_needed, 2))
-                        + " > cap " + str(round(margin_cap, 2))
-                        + ". Lots: " + str(lots) + " -> " + str(max_lots)
-                        + ". Actual risk: " + str(round(actual_risk, 2)))
+                    logger.warning(
+                        f"LEVERAGE CONSTRAINT {symbol}: margin needed {margin_needed:.2f} "
+                        f"> cap {margin_cap:.2f}. Lots reduced: {lots} -> {max_lots}"
+                    )
                     lots = max_lots
-                if lots <= 0:
-                    logger.error("build_order: Insufficient margin for " + symbol + ". Blocked.")
-                    return None
 
-        # Step 6: Exact P&L estimates
-        est_loss   = round(lots * sl_ticks * tick_value, 2)
+        # --- Verification ---
+        est_loss = round(lots * sl_ticks * tick_value, 2)
         est_profit = round(lots * tp_ticks * tick_value, 2)
 
-        logger.info("Order built: " + signal + " " + symbol
-            + " | Entry~" + str(round(close_price, 5))
-            + " | SL=" + str(round(sl, 5)) + " (dist=" + str(round(sl_distance, 5)) + ")"
-            + " | TP=" + str(round(tp, 5)) + " (dist=" + str(round(tp_distance, 5)) + ")"
-            + " | R:R=1:" + str(self.rr_ratio) + " | Lots=" + str(lots)
-            + " | Est.Loss=$" + str(est_loss) + " | Est.Profit=$" + str(est_profit)
-            + " | Leverage=1:" + str(leverage) + " | FreeMgn=" + str(round(free_margin, 2)))
+        logger.info(
+            f"Order built: {signal} {symbol} | Entry~{close_price:.5f} "
+            f"| SL={sl:.5f} (dist={final_sl_distance:.5f}, ATRx{atr_multiplier}) "
+            f"| TP={tp:.5f} (dist={tp_distance:.5f}) "
+            f"| R:R=1:{self.rr_ratio} | Lots={lots} "
+            f"| Est.Loss=${est_loss} | Est.Profit=${est_profit} "
+            f"| Spread={live_spread:.5f}"
+        )
 
         return OrderEvent(
             symbol=symbol, side=signal, qty=lots,

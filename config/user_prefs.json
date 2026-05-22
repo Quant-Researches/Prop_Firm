@@ -13,10 +13,14 @@
   "execution_mode": "MetaTrader5",
   "bar_count": 350,
   "daily_reset_time": "00:00",
-  "telegram_bot_token": "",
-  "telegram_chat_id": "",
+  "telegram_bot_token": "8243684779:AAEtB1B5IdAsBjp5LiVVDSdDIokcGS0Zxks",
+  "telegram_chat_id": "-1003943497723",
   "gmail_sender": "",
   "gmail_app_password": "",
   "gmail_receiver": "",
-  "ftmo_sod_balance": 10000.0
+  "ftmo_sod_balance": 10000.0,
+  "alert_telegram": true,
+  "alert_email": true,
+  "alert_sound": true,
+  "alert_desktop": true
 }

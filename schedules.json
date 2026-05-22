@@ -784,7 +784,8 @@
     "time": "11:00",
     "enabled": true,
     "created_at": "2026-05-18T19:42:58.881698",
-    "last_run": null
+    "last_run": "2026-05-22T11:00:05.649464+03:00",
+    "pipeline_status": "completed"
   },
   {
     "id": "SCH_Friday_1200_425410",
@@ -808,7 +809,8 @@
     "time": "14:00",
     "enabled": true,
     "created_at": "2026-05-18T19:42:58.881698",
-    "last_run": null
+    "last_run": "2026-05-22T14:00:03.260458+03:00",
+    "pipeline_status": "completed"
   },
   {
     "id": "SCH_Friday_1500_8256EF",
@@ -816,7 +818,8 @@
     "time": "15:00",
     "enabled": true,
     "created_at": "2026-05-18T19:42:58.881698",
-    "last_run": null
+    "last_run": "2026-05-22T15:00:45.182348+03:00",
+    "pipeline_status": "completed"
   },
   {
     "id": "SCH_Friday_1600_7ABE6F",
@@ -832,7 +835,8 @@
     "time": "17:00",
     "enabled": true,
     "created_at": "2026-05-18T19:42:58.881698",
-    "last_run": null
+    "last_run": "2026-05-22T17:00:09.802018+03:00",
+    "pipeline_status": "completed"
   },
   {
     "id": "SCH_Friday_1800_E611CE",
@@ -840,7 +844,8 @@
     "time": "18:00",
     "enabled": true,
     "created_at": "2026-05-18T19:42:58.881698",
-    "last_run": null
+    "last_run": "2026-05-22T18:00:09.237293+03:00",
+    "pipeline_status": "completed"
   },
   {
     "id": "SCH_Friday_1900_052EB0",

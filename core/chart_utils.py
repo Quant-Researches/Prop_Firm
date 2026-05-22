@@ -126,12 +126,13 @@ def generate_trade_chart(
     # ── Custom Ticks for Category Axis (to hide gaps) ──
     if len(plot_df) > 0:
         tick_indices = np.linspace(0, len(plot_df) - 1, num=10, dtype=int)
-        tick_vals = [plot_df.index[i] for i in tick_indices]
+        tick_vals_raw = [plot_df.index[i] for i in tick_indices]
+        tick_vals = [str(v) for v in tick_vals_raw]
 
         if selected_timeframe in ['1wk', '1d']:
-            tick_text = [pd.Timestamp(v).strftime('%Y-%m-%d') for v in tick_vals]
+            tick_text = [pd.Timestamp(v).strftime('%Y-%m-%d') for v in tick_vals_raw]
         else:
-            tick_text = [pd.Timestamp(v).strftime('%m-%d %H:%M') for v in tick_vals]
+            tick_text = [pd.Timestamp(v).strftime('%m-%d %H:%M') for v in tick_vals_raw]
 
         xaxis_config = dict(
             type='category',
@@ -187,3 +188,116 @@ def generate_trade_chart(
     fig_merge.update_yaxes(showgrid=False, row=2, col=1)
 
     return fig_merge
+
+
+def generate_static_trade_chart(
+    df_chart: pd.DataFrame,
+    selected_asset_name: str,
+    selected_timeframe: str,
+    ema_fast: int,
+    ema_slow: int,
+    last_high: float = np.nan,
+    last_low: float = np.nan
+) -> bytes:
+    """
+    Generates a static, high-res PNG byte stream using mplfinance.
+    This runs entirely in-memory using the 'agg' backend, avoiding heavy
+    Chromium/Plotly browser dependencies for background Telegram notifications.
+    """
+    import mplfinance as mpf
+    import io
+
+    if df_chart is None or df_chart.empty:
+        return None
+
+    plot_df = df_chart.copy()
+    plot_df.index = pd.to_datetime(plot_df.index, errors="coerce")
+
+    # Add breathing room on the right side of the chart (8 empty candles)
+    if len(plot_df) > 1:
+        time_diff = plot_df.index[-1] - plot_df.index[-2]
+        pad_idx = [plot_df.index[-1] + time_diff * i for i in range(1, 9)]
+        pad_df = pd.DataFrame(index=pad_idx, columns=plot_df.columns)
+        plot_df = pd.concat([plot_df, pad_df])
+
+    # mplfinance requires specific column names: Open, High, Low, Close, Volume
+    plot_df.rename(columns=lambda x: x.capitalize() if x.lower() != 'volume' else 'Volume', inplace=True)
+
+    # 1. Custom Style (Premium Dark Theme)
+    mc = mpf.make_marketcolors(
+        up='#10b981', down='#ef4444',     # Tailwind Emerald and Red
+        edge='inherit', wick='inherit',
+        volume='#1e293b', ohlc='inherit'
+    )
+    s = mpf.make_mpf_style(
+        marketcolors=mc,
+        gridstyle=':',
+        gridcolor='#1e293b',              # Subtle grid lines
+        facecolor='#0f172a',              # Deep slate background
+        edgecolor='#334155',              # Axis edge colors
+        figcolor='#0f172a',               # Outer background
+        rc={'text.color': '#94a3b8', 'axes.labelcolor': '#94a3b8', 'xtick.color': '#64748b', 'ytick.color': '#64748b'}
+    )
+
+    # 2. Addplots (EMAs, Markers)
+    ap = []
+
+    # EMAs
+    fast_col = 'Fast_ema' if 'Fast_ema' in plot_df else 'Ema_fast' if 'Ema_fast' in plot_df else None
+    if fast_col and fast_col in plot_df.columns:
+        ap.append(mpf.make_addplot(plot_df[fast_col], color='#c084fc', width=1.2)) # Soft Purple
+    
+    slow_col = 'Slow_ema' if 'Slow_ema' in plot_df else 'Ema_slow' if 'Ema_slow' in plot_df else None
+    if slow_col and slow_col in plot_df.columns:
+        ap.append(mpf.make_addplot(plot_df[slow_col], color='#38bdf8', width=1.2)) # Soft Cyan
+
+    # BUY/SELL Markers
+    if 'Signal_vis' in plot_df.columns:
+        buy_signals = np.where(plot_df['Signal_vis'] == 'BUY', plot_df['Low'] * 0.9995, np.nan)
+        sell_signals = np.where(plot_df['Signal_vis'] == 'SELL', plot_df['High'] * 1.0005, np.nan)
+        
+        if not np.isnan(buy_signals).all():
+            ap.append(mpf.make_addplot(buy_signals, type='scatter', markersize=80, marker='^', color='#10b981'))
+        if not np.isnan(sell_signals).all():
+            ap.append(mpf.make_addplot(sell_signals, type='scatter', markersize=80, marker='v', color='#ef4444'))
+
+    # Structural Lines (last_high, last_low)
+    hlines = dict(hlines=[], colors=[], linestyle='--')
+    if pd.notna(last_high):
+        hlines['hlines'].append(last_high)
+        hlines['colors'].append('#10b981') # Green dashed
+    if pd.notna(last_low):
+        hlines['hlines'].append(last_low)
+        hlines['colors'].append('#ef4444') # Red dashed
+    
+    # 3. Render
+    buf = io.BytesIO()
+    
+    kwargs = dict(
+        type='candle',
+        style=s,
+        addplot=ap,
+        volume=True if 'Volume' in plot_df.columns else False,
+        title=f"{selected_asset_name} — {selected_timeframe}",
+        figsize=(10, 6),
+        tight_layout=True,
+        savefig=dict(fname=buf, dpi=150, format='png', bbox_inches='tight'),
+        returnfig=True
+    )
+    
+    if hlines['hlines']:
+        kwargs['hlines'] = hlines
+
+    # Explicitly use non-interactive backend
+    import matplotlib
+    matplotlib.use('Agg')
+    
+    fig, axlist = mpf.plot(plot_df, **kwargs)
+    
+    # Cleanup memory
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+    
+    buf.seek(0)
+    return buf.getvalue()
+
