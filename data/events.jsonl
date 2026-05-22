@@ -36,3 +36,13 @@
 {"timestamp": "2026-05-20T20:30:05.566595", "kind": "signal", "msg": "Phase: BULLISH | Signal: HOLD | Reason: Breakout > High but filtered: ATR Slope \u2264 0"}
 {"timestamp": "2026-05-20T20:30:05.573677", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: $10,000.00 | uPnL: $0.00"}
 {"timestamp": "2026-05-20T20:30:05.583905", "kind": "info", "msg": "Pipeline complete @ Wednesday 18:00 FTMO | signal=HOLD | status=Pipeline Already Run"}
+{"timestamp": "2026-05-22T09:45:39.772071", "kind": "bot", "msg": "BOT STARTED | source=daemon | mode=live | symbol=EURUSD | timeframe=1h | pid=19712 | schedule_slots=110 | mt5_configured=True"}
+{"timestamp": "2026-05-22T11:36:31.296325", "kind": "bot", "msg": "BOT STOPPED | source=daemon | reason=keyboard_interrupt | uptime=01:50:51 | started_at=2026-05-22T09:45:39.771070"}
+{"timestamp": "2026-05-22T11:57:03.428435", "kind": "bot", "msg": "BOT STARTED | source=daemon | mode=live | symbol=EURUSD | timeframe=1h | pid=23572 | schedule_slots=110 | mt5_configured=True"}
+{"timestamp": "2026-05-22T12:30:06.873529", "kind": "info", "msg": "Candle close \u2192 pipeline start: Friday 10:00 (FTMO)"}
+{"timestamp": "2026-05-22T12:30:09.879968", "kind": "info", "msg": "Starting scheduled pipeline tick (Mode: MetaTrader5)..."}
+{"timestamp": "2026-05-22T12:30:09.885283", "kind": "market", "msg": "Fetched 350 candles via MT5"}
+{"timestamp": "2026-05-22T12:30:09.887279", "kind": "market", "msg": "Live LTP: $1.16"}
+{"timestamp": "2026-05-22T12:30:09.960866", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-05-22T12:30:09.962962", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: $10,000.00 | uPnL: $0.00"}
+{"timestamp": "2026-05-22T12:30:09.965978", "kind": "info", "msg": "Pipeline complete @ Friday 10:00 FTMO | signal=HOLD | status=Pipeline Already Run"}

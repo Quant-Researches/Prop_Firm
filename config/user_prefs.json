@@ -1,12 +1,11 @@
 {
-  "mt5_account": "1513392309",
-  "mt5_password": "D?$L13le",
+  "mt5_account": "1513473425",
+  "mt5_password": "q8g6@$*gEZG?9",
   "mt5_server": "FTMO-Demo",
   "mt5_path": "",
   "trading_symbol": "EURUSD",
   "timeframe": "1h",
   "initial_balance": 10000.0,
-  "ftmo_sod_balance": 10000.0,
   "ema_fast": 5,
   "ema_slow": 8,
   "use_vol_filter": false,
@@ -19,8 +18,5 @@
   "gmail_sender": "",
   "gmail_app_password": "",
   "gmail_receiver": "",
-  "alert_telegram": true,
-  "alert_email": true,
-  "alert_sound": true,
-  "alert_desktop": true
+  "ftmo_sod_balance": 10000.0
 }

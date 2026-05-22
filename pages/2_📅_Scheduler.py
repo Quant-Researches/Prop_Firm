@@ -26,6 +26,7 @@ SCHEDULES_FILE = Path(__file__).parent.parent / "schedules.json"
 
 # ── CSS ────────────────────────────────────────────────────────────────────────
 from Utilities.ui_components import load_css, render_sidebar, init_session_state
+from core.ftmo_time import find_next_schedule, ftmo_date
 load_css()
 st.markdown("""
 <style>
@@ -124,40 +125,9 @@ def _validate_time(hh: int, mm: int) -> tuple[bool, str]:
     return True, f"{hh:02d}:{mm:02d}"
 
 def _get_next_schedule_id(schedules: list[dict]) -> str:
-    """Find the ID of the enabled schedule closest to current time (in the future)."""
-    now = datetime.now()
-    best_id = None
-    min_delta = timedelta(days=999)
-
-    weekday_idx = {"Monday":0,"Tuesday":1,"Wednesday":2,"Thursday":3,
-                   "Friday":4,"Saturday":5,"Sunday":6}
-
-    for s in schedules:
-        if not s.get("enabled", True): continue
-        
-        # Determine next occurrence date
-        day_name = s["day"]
-        hh, mm = map(int, s["time"].split(":"))
-        
-        today = datetime.now().date()
-        target_weekday = weekday_idx[day_name]
-        
-        # Days until next occurrence
-        days_ahead = (target_weekday - now.weekday()) % 7
-        
-        # Check if it's today but already passed
-        next_dt = datetime.combine(today + timedelta(days=days_ahead), datetime.min.time().replace(hour=hh, minute=mm))
-        
-        if next_dt <= now:
-            # If it's today and passed, or it happened earlier this week, move to next week
-            next_dt += timedelta(days=7)
-            
-        delta = next_dt - now
-        if delta < min_delta:
-            min_delta = delta
-            best_id = s["id"]
-            
-    return best_id
+    """Find the ID of the next schedule to fire, using FTMO server time (Europe/Helsinki)."""
+    nxt, _ = find_next_schedule(schedules, enabled_only=True)
+    return nxt["id"] if nxt else None
 
 
 # ── Available functions ────────────────────────────────────────────────────────
@@ -388,10 +358,10 @@ st.markdown('<div class="section-label">🗓️ Weekly Schedule</div>', unsafe_a
 from datetime import date, timedelta
 
 def _next_date_for(day_name: str) -> date:
-    """Return the soonest future date (today included) with the given weekday name."""
+    """Return the soonest future date (today included) with the given weekday name, in FTMO timezone."""
     weekday_idx = {"Monday":0,"Tuesday":1,"Wednesday":2,"Thursday":3,
                    "Friday":4,"Saturday":5,"Sunday":6}
-    today = date.today()
+    today = ftmo_date()  # Use FTMO date, not local IST date
     target = weekday_idx[day_name]
     delta = (target - today.weekday()) % 7
     return today + timedelta(days=delta)
