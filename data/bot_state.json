@@ -1,0 +1,21 @@
+{
+  "dashboard": {
+    "running": true,
+    "started_at": "2026-05-23T22:11:12.893077",
+    "stopped_at": null,
+    "mode": "Live",
+    "symbol": "EURUSD",
+    "timeframe": "30m",
+    "pid": null
+  },
+  "daemon": {
+    "running": false,
+    "started_at": "2026-05-22T20:49:57.115617",
+    "stopped_at": "2026-05-23T14:14:56.961310",
+    "last_uptime": "17:24:59",
+    "last_stop_reason": "keyboard_interrupt",
+    "mode": "live",
+    "symbol": "EURUSD",
+    "timeframe": "1h"
+  }
+}

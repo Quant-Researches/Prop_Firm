@@ -4,7 +4,7 @@
   "mt5_server": "FTMO-Demo",
   "mt5_path": "",
   "trading_symbol": "EURUSD",
-  "timeframe": "1h",
+  "timeframe": "30m",
   "initial_balance": 10000.0,
   "ema_fast": 5,
   "ema_slow": 8,

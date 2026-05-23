@@ -204,3 +204,12 @@
 {"timestamp": "2026-05-22T20:50:46.228772", "kind": "market", "msg": "Live LTP: $1.16"}
 {"timestamp": "2026-05-22T20:50:46.440007", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
 {"timestamp": "2026-05-22T20:50:46.443137", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: $10,000.00 | uPnL: $0.00"}
+{"timestamp": "2026-05-22T21:30:09.081073", "kind": "info", "msg": "Candle close \u2192 pipeline start: Friday 19:00 (FTMO)"}
+{"timestamp": "2026-05-22T21:30:09.083446", "kind": "info", "msg": "Starting scheduled pipeline tick (Mode: MetaTrader5)..."}
+{"timestamp": "2026-05-22T21:30:09.098627", "kind": "market", "msg": "Fetched 350 candles via MT5"}
+{"timestamp": "2026-05-22T21:30:09.101828", "kind": "market", "msg": "Live LTP: $1.16"}
+{"timestamp": "2026-05-22T21:30:09.324721", "kind": "signal", "msg": "Phase: BEARISH | Signal: HOLD | Reason: "}
+{"timestamp": "2026-05-22T21:30:09.327240", "kind": "info", "msg": "Tick Complete. Open Pos: 0 | Equity: $10,000.00 | uPnL: $0.00"}
+{"timestamp": "2026-05-22T21:30:09.335775", "kind": "info", "msg": "Pipeline complete @ Friday 19:00 FTMO | signal=HOLD | status=Pipeline Already Run"}
+{"timestamp": "2026-05-23T14:14:56.995101", "kind": "bot", "msg": "BOT STOPPED | source=daemon | reason=keyboard_interrupt | uptime=17:24:59 | started_at=2026-05-22T20:49:57.115617"}
+{"timestamp": "2026-05-23T22:11:12.896442", "kind": "bot", "msg": "BOT STARTED | source=dashboard | mode=Live | symbol=EURUSD | timeframe=30m"}
