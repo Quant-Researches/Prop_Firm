@@ -57,7 +57,7 @@ class TradingEngine:
                 pass
         return {}
 
-    def run_pipeline_tick(self, is_manual=False):
+    def run_pipeline_tick(self, is_manual=False, scheduled_close=None):
         prefs = self.load_prefs()
         tick_type = "manual" if is_manual else "scheduled"
         
@@ -125,8 +125,11 @@ class TradingEngine:
             self.strategy.ema_long_period = prefs.get("ema_slow", 8)
             
         self.strategy.update_data(df)
-        result = self.strategy.run_analysis()
-        
+        result = self.strategy.run_analysis(
+            scheduled_close=scheduled_close,
+            is_manual=is_manual,
+        )
+         
         if not result:
             self.storage.log_event("error", "Strategy produced no result (insufficient indicator data or no candles). Tick skipped.")
             return None
@@ -134,6 +137,12 @@ class TradingEngine:
         sig = result.get("Signal", "HOLD")
         phase = result.get("Market_Phase", "SIDEWAYS")
         action = result.get('Action', '')
+        bar_sel = result.get("bar_selection", "")
+        if bar_sel:
+            self.storage.log_event(
+                "info",
+                f"Signal bar: open={result.get('signal_bar_open')} | {bar_sel}",
+            )
         
         self.storage.log_event("signal", f"Phase: {phase} | Signal: {sig} | Reason: {action}")
         
@@ -141,9 +150,10 @@ class TradingEngine:
         if sig in ["BUY", "SELL"]:
             strategy_df = result.get("data")
             if strategy_df is not None and not strategy_df.empty:
-                latest_row = strategy_df.iloc[-1]
+                sig_idx = result.get("signal_bar_index", len(strategy_df) - 1)
+                signal_row = strategy_df.iloc[sig_idx]
                 save_signal(
-                    latest_row=latest_row,
+                    latest_row=signal_row,
                     symbol=sym,
                     interval=tf,
                     sec_id=sym,
@@ -162,8 +172,10 @@ class TradingEngine:
         if sig in ["BUY", "SELL"] and execution_mode == "MetaTrader5":
             strategy_df = result.get("data")
             price_df = strategy_df if strategy_df is not None and not strategy_df.empty else df
-            close_px = price_df['Close'].iloc[-1]
-            atr      = price_df['ATR'].iloc[-1] if 'ATR' in price_df.columns else (close_px * 0.005)
+            sig_idx = result.get("signal_bar_index", len(price_df) - 1)
+            signal_row = price_df.iloc[sig_idx]
+            close_px = float(signal_row['Close'])
+            atr = float(signal_row['ATR']) if 'ATR' in signal_row.index and pd.notna(signal_row['ATR']) else (close_px * 0.005)
 
             # ── Sync starting balance from SOD snapshot ────────────────────
             # Use initial_balance from settings as the SOD fallback — never hardcode
@@ -483,4 +495,7 @@ class TradingEngine:
             "block_reason": _block_reason,
             "failure_code": _failure_code if sig in ("BUY", "SELL") else "",
             "risk_warnings": _risk_warnings,
+            "signal_bar_open": result.get("signal_bar_open"),
+            "scheduled_close": result.get("scheduled_close"),
+            "bar_selection": result.get("bar_selection"),
         }

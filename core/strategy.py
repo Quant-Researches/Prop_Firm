@@ -437,9 +437,12 @@ class RealTimeSignalGenerator:
         self.data['Signal_Vis'] = signals
         self.data['Signal_Reason'] = reasons
 
-    def run_analysis(self):
+    def run_analysis(self, scheduled_close=None, is_manual=False):
         """
-        Runs the full analysis/indicators on the current data and returns the latest signal/status.
+        Runs full analysis and returns signal for the verified signal bar.
+
+        scheduled_close: candle CLOSE time from scheduler (FTMO/Helsinki).
+        is_manual: if True, pick last closed bar by wall-clock instead.
         """
         if self.data.empty:
             return None
@@ -456,39 +459,49 @@ class RealTimeSignalGenerator:
         # 3. Generate Historical Signals for Visualization
         self.generate_historical_signals()
         
-        # 4. Analyze Latest
-        latest_row = self.data.iloc[-1]
+        # 4. Resolve signal bar by timestamp (not blind iloc[-1])
+        from core.bar_selector import resolve_signal_bar
+        from core.ftmo_time import now_ftmo
+
+        close_for_lookup = None if is_manual else scheduled_close
+        selection = resolve_signal_bar(
+            self.data,
+            self.interval,
+            scheduled_close=close_for_lookup,
+            now=now_ftmo(),
+        )
+        signal_row = self.data.iloc[selection.index]
         
-        # Phase (already set in historical signals loop, but we can verify)
-        self.market_phase = self.determine_phase(latest_row)
+        self.market_phase = self.determine_phase(signal_row)
         
-        # Signal (Latest Raw)
-        raw_signal, raw_reason = self._generate_core_signal(latest_row)
+        raw_signal, raw_reason = self._generate_core_signal(signal_row)
         
-        # Deduplicated Signal (from historical backfill)
-        clean_signal = latest_row.get('Signal_Vis', 'HOLD')
+        clean_signal = signal_row.get('Signal_Vis', 'HOLD')
         if pd.isna(clean_signal):
             clean_signal = "HOLD"
             
-        clean_reason = latest_row.get('Signal_Reason', raw_reason)
+        clean_reason = signal_row.get('Signal_Reason', raw_reason)
         if pd.isna(clean_reason):
             clean_reason = raw_reason
         
-        # Return a rich result object
         return {
             "symbol": self.symbol,
-            "time": latest_row.name,
-            "price": latest_row['Close'],
+            "time": signal_row.name,
+            "price": signal_row['Close'],
             "phase": self.market_phase,
-            "Signal": clean_signal,          # Capitalized to match main.py expectation
-            "Market_Phase": self.market_phase, # Capitalized to match main.py expectation
-            "Action": clean_reason,            # Capitalized to match main.py expectation
+            "Signal": clean_signal,
+            "Market_Phase": self.market_phase,
+            "Action": clean_reason,
             "raw_signal": raw_signal,
-            "data": self.data, # Return full dataframe with indicators for plotting
-            "last_high": latest_row.get('Last_High', np.nan),
-            "last_low": latest_row.get('Last_Low', np.nan),
-            "fast_ema": latest_row['fast_ema'],
-            "slow_ema": latest_row['slow_ema'],
-            "atr": latest_row.get('ATR', np.nan),
-            "atr_percentile": latest_row.get('ATR_Percentile', np.nan)
+            "data": self.data,
+            "last_high": signal_row.get('Last_High', np.nan),
+            "last_low": signal_row.get('Last_Low', np.nan),
+            "fast_ema": signal_row['fast_ema'],
+            "slow_ema": signal_row['slow_ema'],
+            "atr": signal_row.get('ATR', np.nan),
+            "atr_percentile": signal_row.get('ATR_Percentile', np.nan),
+            "signal_bar_index": selection.index,
+            "signal_bar_open": selection.bar_open,
+            "scheduled_close": selection.scheduled_close,
+            "bar_selection": selection.method,
         }

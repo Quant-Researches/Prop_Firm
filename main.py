@@ -177,7 +177,7 @@ def ensure_mt5_connected(prefs: dict) -> None:
 
 # ── Non-blocking pipeline fire ────────────────────────────────────────────────
 
-def _fire_pipeline(engine: TradingEngine, prefs: dict, close_dt: datetime) -> None:
+def _fire_pipeline(engine: TradingEngine, prefs: dict, close_dt: datetime, is_manual: bool = False) -> None:
     """
     Run one pipeline tick and dispatch notifications.
     Executed in a daemon thread — never blocks the scheduler loop.
@@ -195,7 +195,10 @@ def _fire_pipeline(engine: TradingEngine, prefs: dict, close_dt: datetime) -> No
     logger.info("🔥 Pipeline firing: %s %s FTMO", day, time_str)
 
     try:
-        result = engine.run_pipeline_tick(is_manual=False)
+        result = engine.run_pipeline_tick(
+            is_manual=is_manual,
+            scheduled_close=close_dt if not is_manual else None,
+        )
         sig = (result or {}).get("signal", "HOLD")
         engine.storage.log_event(
             "info",
@@ -476,7 +479,7 @@ def run_once_now() -> None:
     engine = TradingEngine(mode="live")
     now_hel = now_ftmo()
     print(f"Manual tick — {ftmo_display(now_hel)}")
-    _fire_pipeline(engine, prefs, now_hel)
+    _fire_pipeline(engine, prefs, now_hel, is_manual=True)
     time.sleep(3)   # give notification thread time to start
     print("Done. Check Telegram / data/events.jsonl")
 
