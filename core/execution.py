@@ -113,22 +113,34 @@ class ExecutionEngine:
         ):
             raise RuntimeError(f"MT5 connection failed before order execution. {mt5.last_error()}")
 
-        if not mt5.symbol_select(order.symbol, True):
+        symbol_info = mt5.symbol_info(order.symbol)
+        if not symbol_info or not mt5.symbol_select(order.symbol, True):
             raise RuntimeError(f"Symbol '{order.symbol}' not found or not visible in MarketWatch.")
 
         # Determine lot size
         volume = float(order.qty)
-        
+
         # MT5 Order Types
         order_type = mt5.ORDER_TYPE_BUY if order.side.upper() == "BUY" else mt5.ORDER_TYPE_SELL
-        
+
         # Tick for current price
         tick = mt5.symbol_info_tick(order.symbol)
         if not tick:
             raise RuntimeError(f"MT5 API: Could not get tick for {order.symbol}")
-            
+
         price = tick.ask if order.side.upper() == "BUY" else tick.bid
-        
+
+        # ── Dynamically resolve the correct filling mode ───────────────────
+        # filling_mode is a bitmask: bit 0 = FOK (1), bit 1 = IOC (2), bit 2 = RETURN (4).
+        # We prefer FOK > IOC > RETURN — pick the first one the broker supports.
+        _fm = symbol_info.filling_mode
+        if _fm & 1:                          # FOK supported (most common on FTMO forex/metals)
+            type_filling = mt5.ORDER_FILLING_FOK
+        elif _fm & 2:                        # IOC supported
+            type_filling = mt5.ORDER_FILLING_IOC
+        else:                                # RETURN / partial fills
+            type_filling = mt5.ORDER_FILLING_RETURN
+
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": order.symbol,
@@ -141,13 +153,36 @@ class ExecutionEngine:
             "magic": 234000,
             "comment": "Trade Pulse",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": type_filling,
         }
         
         result = mt5.order_send(request)
-        
+
+        if result is None:
+            raise RuntimeError(f"MT5 order_send returned None — possible connection drop. Last error: {mt5.last_error()}")
+
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            err = f"MT5 Order Send Failed, retcode: {result.retcode}, comment: {result.comment}"
+            # Provide actionable hints for the most common failure retcodes
+            _HINTS = {
+                10027: (
+                    "AutoTrading is DISABLED in the MT5 terminal (retcode 10027). "
+                    "Click the 'AutoTrading' button (green robot icon) in the MT5 toolbar to enable it."
+                ),
+                10030: (
+                    f"Filling mode not supported (retcode 10030). "
+                    f"Symbol filling_mode bitmask={_fm}, selected type_filling={type_filling}."
+                ),
+                10006: "Request rejected by broker (retcode 10006). Check lot size, SL/TP distances and account permissions.",
+                10014: "Invalid lot size (retcode 10014). Check min/max/step lot constraints for this symbol.",
+                10016: "Invalid SL or TP (retcode 10016). Check pip distance from entry price meets broker minimums.",
+                10019: "Insufficient free margin (retcode 10019). Reduce lot size or close existing positions.",
+                10018: "Market is closed (retcode 10018). Check trading session hours.",
+            }
+            hint = _HINTS.get(result.retcode, "")
+            err = (
+                f"MT5 Order Send Failed, retcode: {result.retcode}, comment: {result.comment}"
+                + (f" | HINT: {hint}" if hint else "")
+            )
             raise RuntimeError(err)
             
         fill = FillEvent(

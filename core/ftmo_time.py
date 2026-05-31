@@ -73,6 +73,7 @@ def parse_schedule_datetime(day_name: str, time_str: str, after: datetime | None
         after.day,
         hh,
         mm,
+        59,          # second=59 keeps the "⚡ NEXT" badge visible the full 60-second window.
         tzinfo=FTMO_TZ,
     ) + timedelta(days=days_ahead)
 

@@ -210,7 +210,124 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-st.info("🕒 **TIMEZONE NOTICE:** The execution engine runs strictly on **FTMO MT5 Broker Time (Europe/Helsinki)**. All times you add below MUST be in FTMO Server Time, not your local time. Please refer to the Live Chart or Main Dashboard to see the current FTMO MT5 Server Time.")
+
+# ── Live Countdown Panel ───────────────────────────────────────────────────────
+try:
+    from core.candle_timer import compute_next_candle_close, session_info
+    from core.ftmo_time import now_ftmo as _now_ftmo
+
+    _symbol = st.session_state.get("trading_symbol", "XAUUSD")
+    _tf     = st.session_state.get("timeframe", "1h")
+    _now    = _now_ftmo()
+    _sess   = session_info(_symbol)
+    _next_dt, _sleep_sec = compute_next_candle_close(_symbol, _tf, _now)
+
+    _hh  = int(_sleep_sec // 3600)
+    _mm  = int((_sleep_sec % 3600) // 60)
+    _ss  = int(_sleep_sec % 60)
+    _day_label = _next_dt.strftime("%A")
+
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#1e1b4b 0%,#0d1225 100%);
+                border:1px solid #4f46e5;border-radius:16px;padding:20px 28px;
+                margin-bottom:20px;display:flex;justify-content:space-between;
+                align-items:center;gap:24px;flex-wrap:wrap;">
+        <div>
+            <div style="font-size:0.65rem;color:#64748b;text-transform:uppercase;
+                        letter-spacing:2px;margin-bottom:4px;">NEXT CANDLE CLOSE</div>
+            <div style="font-size:1.5rem;font-weight:800;color:#38bdf8;
+                        font-family:'JetBrains Mono',monospace;letter-spacing:1px;">
+                {_day_label} {_next_dt.strftime('%H:%M')}
+                <span style="font-size:0.85rem;color:#64748b;font-weight:400;">FTMO</span>
+            </div>
+        </div>
+        <div style="text-align:center;">
+            <div style="font-size:0.65rem;color:#64748b;text-transform:uppercase;
+                        letter-spacing:2px;margin-bottom:4px;">DAEMON SLEEPS FOR</div>
+            <div style="font-size:1.5rem;font-weight:800;color:#a78bfa;
+                        font-family:'JetBrains Mono',monospace;">
+                {_hh:02d}h {_mm:02d}m {_ss:02d}s
+            </div>
+        </div>
+        <div style="text-align:center;">
+            <div style="font-size:0.65rem;color:#64748b;text-transform:uppercase;
+                        letter-spacing:2px;margin-bottom:4px;">INSTRUMENT · INTERVAL</div>
+            <div style="font-size:1.1rem;font-weight:700;color:#f8fafc;">
+                {_symbol} · {_tf}
+            </div>
+            <div style="font-size:0.72rem;color:#475569;margin-top:2px;">
+                Session: {_sess['label']} FTMO
+            </div>
+        </div>
+        <div style="text-align:right;">
+            <div style="font-size:0.65rem;color:#64748b;text-transform:uppercase;
+                        letter-spacing:2px;margin-bottom:4px;">SCHEDULER</div>
+            <div style="font-size:0.9rem;font-weight:700;color:#34d399;">
+                ● SLEEP-TO-CLOSE ACTIVE
+            </div>
+            <div style="font-size:0.65rem;color:#475569;margin-top:2px;">
+                No polling · Zero CPU idle
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+except Exception:
+    pass   # candle_timer not yet available — silently skip the panel
+
+st.info("🕒 **TIMEZONE:** All times are **FTMO MT5 Server Time (Europe/Helsinki)**. "
+        "The daemon sleeps **exactly** until each candle closes — no 10-second polling. "
+        "Use the panel above to see when the next pipeline tick will fire.")
+
+
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 4.5 — AUTOMATIC FTMO ACTIVE HOURS GENERATOR
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown('<div class="section-label">⚡ Automatic FTMO Active Hours Generator</div>', unsafe_allow_html=True)
+
+with st.container():
+    st.markdown("""
+    <div style="background:linear-gradient(135deg, #1e1b4b 0%, #0d1225 100%); border:1px solid #4f46e5; border-radius:14px; padding:20px; margin-bottom:20px;">
+        <div style="font-weight:700; color:#818cf8; font-size:1rem; margin-bottom:8px;">🔥 Active Hours Auto-Scheduler</div>
+        <div style="font-size:0.8rem; color:#94a3b8; line-height:1.6; margin-bottom:16px;">
+            Automatically configure the entire weekly schedule to align with standard <strong>FTMO trading session hours</strong> for your active trading instrument. 
+            All other custom schedules will be completely removed, and a new optimal grid aligned with your settings will be loaded.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col_g1, col_g2, col_g3 = st.columns([1.5, 1.5, 1.2])
+    
+    active_symbol = st.session_state.get("trading_symbol", "XAUUSD")
+    active_timeframe = st.session_state.get("timeframe", "5m")
+    
+    with col_g1:
+        st.markdown(f"<div style='font-size:0.75rem;color:#64748b;'>Trading Instrument</div><div style='font-weight:600;font-size:1.1rem;color:#f8fafc;padding:4px 0;'>💎 {active_symbol}</div>", unsafe_allow_html=True)
+    with col_g2:
+        st.markdown(f"<div style='font-size:0.75rem;color:#64748b;'>Selected Interval</div><div style='font-weight:600;font-size:1.1rem;color:#38bdf8;padding:4px 0;'>⏱️ {active_timeframe}</div>", unsafe_allow_html=True)
+    with col_g3:
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        generate_btn = st.button("🔥 Auto-Generate Grid", use_container_width=True, type="primary")
+        
+    if generate_btn:
+        from core.scheduler_helper import update_and_save_schedule
+        import json
+        from pathlib import Path
+        p_file = Path("config/user_prefs.json")
+        prefs_payload = json.loads(p_file.read_text(encoding="utf-8")) if p_file.exists() else {}
+        
+        with st.spinner("⚡ Rebuilding FTMO schedule..."):
+            count, msg = update_and_save_schedule(active_symbol, active_timeframe, prefs=prefs_payload)
+            if count > 0:
+                st.session_state.schedules = _load_schedules()
+                st.toast(f"✅ Generated {count} active hours slots for {active_symbol}!", icon="⚡")
+                st.success(f"🎉 **Success!** Automatically generated {count} FTMO-compliant trading slots aligned to standard market sessions. All previous schedules have been cleared.")
+                st.rerun()
+            else:
+                st.error(f"❌ Failed to generate schedule: {msg}")
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -551,55 +668,6 @@ else:
                 "<hr style='border:none;border-top:1px solid #1a2235;margin:3px 0'>",
                 unsafe_allow_html=True,
             )
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# SECTION 4.5 — AUTOMATIC FTMO ACTIVE HOURS GENERATOR
-# ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="section-label">⚡ Automatic FTMO Active Hours Generator</div>', unsafe_allow_html=True)
-
-with st.container():
-    st.markdown("""
-    <div style="background:linear-gradient(135deg, #1e1b4b 0%, #0d1225 100%); border:1px solid #4f46e5; border-radius:14px; padding:20px; margin-bottom:20px;">
-        <div style="font-weight:700; color:#818cf8; font-size:1rem; margin-bottom:8px;">🔥 Active Hours Auto-Scheduler</div>
-        <div style="font-size:0.8rem; color:#94a3b8; line-height:1.6; margin-bottom:16px;">
-            Automatically configure the entire weekly schedule to align with standard <strong>FTMO trading session hours</strong> for your active trading instrument. 
-            All other custom schedules will be completely removed, and a new optimal grid aligned with your settings will be loaded.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col_g1, col_g2, col_g3 = st.columns([1.5, 1.5, 1.2])
-    
-    active_symbol = st.session_state.get("trading_symbol", "XAUUSD")
-    active_timeframe = st.session_state.get("timeframe", "5m")
-    
-    with col_g1:
-        st.markdown(f"<div style='font-size:0.75rem;color:#64748b;'>Trading Instrument</div><div style='font-weight:600;font-size:1.1rem;color:#f8fafc;padding:4px 0;'>💎 {active_symbol}</div>", unsafe_allow_html=True)
-    with col_g2:
-        st.markdown(f"<div style='font-size:0.75rem;color:#64748b;'>Selected Interval</div><div style='font-weight:600;font-size:1.1rem;color:#38bdf8;padding:4px 0;'>⏱️ {active_timeframe}</div>", unsafe_allow_html=True)
-    with col_g3:
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        generate_btn = st.button("🔥 Auto-Generate Grid", use_container_width=True, type="primary")
-        
-    if generate_btn:
-        from core.scheduler_helper import update_and_save_schedule
-        import json
-        from pathlib import Path
-        p_file = Path("config/user_prefs.json")
-        prefs_payload = json.loads(p_file.read_text(encoding="utf-8")) if p_file.exists() else {}
-        
-        with st.spinner("⚡ Rebuilding FTMO schedule..."):
-            count, msg = update_and_save_schedule(active_symbol, active_timeframe, prefs=prefs_payload)
-            if count > 0:
-                st.session_state.schedules = _load_schedules()
-                st.toast(f"✅ Generated {count} active hours slots for {active_symbol}!", icon="⚡")
-                st.success(f"🎉 **Success!** Automatically generated {count} FTMO-compliant trading slots aligned to standard market sessions. All previous schedules have been cleared.")
-                st.rerun()
-            else:
-                st.error(f"❌ Failed to generate schedule: {msg}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 

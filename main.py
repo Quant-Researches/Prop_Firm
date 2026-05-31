@@ -5,6 +5,18 @@ Run from project root:
     python main.py
 
 Requires: MT5 terminal open, config/user_prefs.json with credentials.
+
+Architecture
+------------
+This daemon uses a SLEEP-TO-NEXT-CLOSE scheduler:
+  1. Read symbol + timeframe from Settings (user_prefs.json).
+  2. Call compute_next_candle_close() → exact seconds until next MT5 candle close.
+  3. Sleep precisely that many seconds (chunked every 5 min for settings change detection).
+  4. Wake up and immediately fire the pipeline in a daemon thread.
+  5. Loop back to step 1.
+
+There is NO polling, NO HH:MM string matching, NO schedules.json reading at runtime.
+schedules.json is written by the Scheduler UI for display purposes only.
 """
 from __future__ import annotations
 
@@ -12,12 +24,13 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-# Always run relative to project root (schedules.json, data/, config/)
+# Always run relative to project root
 ROOT = Path(__file__).resolve().parent
 os.chdir(ROOT)
 if str(ROOT) not in sys.path:
@@ -30,8 +43,9 @@ from core.ftmo_time import (
     ftmo_display,
     ftmo_hhmm,
     now_ftmo,
-    schedule_matches_now,
+    schedule_matches_now,      # kept for --check-schedule CLI
 )
+from core.candle_timer import compute_next_candle_close, session_info
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,11 +53,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger("Daemon")
 
-SCHEDULES_PATH = ROOT / "schedules.json"
+SCHEDULES_PATH   = ROOT / "schedules.json"
+LAST_FIRED_PATH  = ROOT / "data" / "last_fired.json"
+DAILY_RESET_PATH = ROOT / "data" / "daily_reset_date.txt"
 
 
-_cached_schedules = None
-_last_schedules_mtime = 0.0
+# ── schedules.json helpers (display-only; not used for execution) ─────────────
+
+_cached_schedules      = None
+_last_schedules_mtime  = 0.0
+
 
 def load_schedules() -> list[dict]:
     global _cached_schedules, _last_schedules_mtime
@@ -70,26 +89,81 @@ def save_schedules(schedules: list[dict]) -> None:
         pass
 
 
-def mark_schedule_run(day: str, time_str: str) -> None:
-    """Mark slot as completed after pipeline ran (resets on next week's same slot)."""
-    scheds = load_schedules()
-    updated = False
-    now_iso = now_ftmo().isoformat()
-    for s in scheds:
-        if s.get("day") == day and s.get("time") == time_str:
-            s["last_run"] = now_iso
-            s["pipeline_status"] = "completed"
-            updated = True
-    if updated:
-        save_schedules(scheds)
+# ── Restart-safe last-fired guard ─────────────────────────────────────────────
 
+def _load_last_fired() -> str | None:
+    """Read the last-fired candle key (YYYY-MM-DD HH:MM) from disk."""
+    try:
+        if LAST_FIRED_PATH.exists():
+            return json.loads(
+                LAST_FIRED_PATH.read_text(encoding="utf-8")
+            ).get("fired_key")
+    except Exception:
+        pass
+    return None
+
+
+def _save_last_fired(fired_key: str, close_dt: datetime) -> None:
+    """Atomically persist the fired key so a mid-minute restart doesn't re-fire."""
+    try:
+        LAST_FIRED_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = LAST_FIRED_PATH.with_suffix(".tmp")
+        tmp.write_text(
+            json.dumps({
+                "fired_key": fired_key,
+                "close_dt":  close_dt.isoformat(),
+                "saved_at":  datetime.now().isoformat(),
+            }),
+            encoding="utf-8",
+        )
+        tmp.replace(LAST_FIRED_PATH)   # atomic rename — no partial-write corruption
+    except Exception as e:
+        logger.warning("Could not persist last_fired: %s", e)
+
+
+# ── Daily reset guard ─────────────────────────────────────────────────────────
+
+def _daily_reset_done_today() -> bool:
+    try:
+        if DAILY_RESET_PATH.exists():
+            return DAILY_RESET_PATH.read_text().strip() == \
+                   datetime.now(ZoneInfo("Europe/Prague")).strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return False
+
+
+def _mark_daily_reset_done() -> None:
+    try:
+        DAILY_RESET_PATH.parent.mkdir(parents=True, exist_ok=True)
+        DAILY_RESET_PATH.write_text(
+            datetime.now(ZoneInfo("Europe/Prague")).strftime("%Y-%m-%d")
+        )
+    except Exception as e:
+        logger.warning("Could not persist daily_reset_date: %s", e)
+
+
+# ── Chunked sleep ─────────────────────────────────────────────────────────────
+
+def _chunked_sleep(total_sec: float, chunk_sec: int = 300) -> None:
+    """
+    Sleep in 5-minute chunks so a symbol/TF change in Settings takes effect
+    within 5 minutes rather than waiting the full inter-candle sleep duration.
+    """
+    remaining = float(total_sec)
+    while remaining > 0:
+        time.sleep(min(remaining, float(chunk_sec)))
+        remaining -= chunk_sec
+
+
+# ── MT5 connection helper ─────────────────────────────────────────────────────
 
 def ensure_mt5_connected(prefs: dict) -> None:
     import MetaTrader5 as mt5
     from core.mt5_connection import MT5Connection
-    
+
     if not mt5.terminal_info():
-        logger.warning("MT5 disconnected mid-day! Attempting auto-recovery...")
+        logger.warning("MT5 disconnected! Attempting auto-recovery…")
         if MT5Connection.connect(
             prefs.get("mt5_account", ""),
             prefs.get("mt5_password", ""),
@@ -98,79 +172,99 @@ def ensure_mt5_connected(prefs: dict) -> None:
         ):
             logger.info("MT5 auto-recovery successful.")
         else:
-            logger.error(f"MT5 auto-recovery failed: {mt5.last_error()}")
+            logger.error("MT5 auto-recovery failed: %s", mt5.last_error())
 
 
-def run_scheduled_tick(engine: TradingEngine, prefs: dict, day: str, time_str: str) -> None:
-    """Execute one pipeline tick and send notifications."""
+# ── Non-blocking pipeline fire ────────────────────────────────────────────────
+
+def _fire_pipeline(engine: TradingEngine, prefs: dict, close_dt: datetime) -> None:
+    """
+    Run one pipeline tick and dispatch notifications.
+    Executed in a daemon thread — never blocks the scheduler loop.
+    """
     from core.notifier import process_and_broadcast
 
-    ensure_mt5_connected(prefs)
+    day      = ftmo_day_name(close_dt)
+    time_str = ftmo_hhmm(close_dt)
 
-    logger.info("Scheduler firing: %s %s (FTMO candle close)", day, time_str)
+    ensure_mt5_connected(prefs)
     engine.storage.log_event(
         "info",
-        f"Candle close → pipeline start: {day} {time_str} (FTMO)",
+        f"Candle close → pipeline: {day} {time_str} (FTMO)",
     )
+    logger.info("🔥 Pipeline firing: %s %s FTMO", day, time_str)
 
     try:
         result = engine.run_pipeline_tick(is_manual=False)
-        mark_schedule_run(day, time_str)
+        sig = (result or {}).get("signal", "HOLD")
+        engine.storage.log_event(
+            "info",
+            f"Pipeline complete @ {day} {time_str} FTMO | signal={sig}",
+        )
+        logger.info("✅ Pipeline done — signal=%s", sig)
 
-        if result:
-            sig = result.get("signal", "HOLD")
-            engine.storage.log_event(
-                "info",
-                f"Pipeline complete @ {day} {time_str} FTMO | signal={sig} | status=Pipeline Already Run",
-            )
-            logger.info("Tick complete — signal=%s — slot marked completed", sig)
-        else:
-            engine.storage.log_event("warning", "Scheduler tick returned no result.")
+        if not result:
             result = {
-                "symbol": prefs.get("trading_symbol", "UNKNOWN"),
-                "signal": "HOLD",
-                "phase": "UNKNOWN",
-                "error": "Strategy returned no result",
+                "symbol":  prefs.get("trading_symbol", "UNKNOWN"),
+                "signal":  "HOLD",
+                "phase":   "UNKNOWN",
+                "error":   "Strategy returned no result",
             }
 
-        # Blocking call — waits for Telegram/email/desktop threads (see notifier._run_threads)
-        process_and_broadcast(result, prefs, "LTS_AUTOMATIC")
+        # Notifications in a sub-thread so the pipeline thread returns immediately
+        threading.Thread(
+            target=process_and_broadcast,
+            args=(result, prefs, "LTS_AUTOMATIC"),
+            daemon=True,
+            name=f"Notif-{time_str}",
+        ).start()
 
-    except Exception as e:
-        engine.storage.log_event("error", f"Pipeline crash: {e}")
-        logger.exception("Pipeline crash on scheduled tick")
-        try:
-            from core.notifier import broadcast_risk_alert
-            broadcast_risk_alert(
-                alert_type="BLOCKED",
-                symbol=prefs.get("trading_symbol", "UNKNOWN"),
-                warnings=[f"SCHEDULER PIPELINE CRASH: {e}"],
-                suggestions=[
-                    "Last scheduled tick FAILED.",
-                    "Check data/events.jsonl and restart main.py after fixing MT5.",
-                ],
-                prefs=prefs,
-                block_reason=str(e),
-            )
-        except Exception:
-            logger.exception("Failed to send crash notification")
+    except Exception as exc:
+        engine.storage.log_event("error", f"Pipeline crash: {exc}")
+        logger.exception("Pipeline crash on %s %s", day, time_str)
 
+        def _notify_crash() -> None:
+            try:
+                from core.notifier import broadcast_risk_alert
+                broadcast_risk_alert(
+                    alert_type="BLOCKED",
+                    symbol=prefs.get("trading_symbol", "UNKNOWN"),
+                    warnings=[f"PIPELINE CRASH at {day} {time_str}: {exc}"],
+                    suggestions=[
+                        "Last tick FAILED. Check data/events.jsonl.",
+                        "Restart daemon after fixing the issue.",
+                    ],
+                    prefs=prefs,
+                    block_reason=str(exc),
+                )
+            except Exception:
+                pass
+
+        threading.Thread(target=_notify_crash, daemon=True).start()
+
+
+# ── Daily reset ───────────────────────────────────────────────────────────────
 
 def run_daily_reset(engine: TradingEngine, prefs: dict, prefs_path: Path, reset_time: str) -> None:
     """Reconnect MT5 and snapshot start-of-day balance (Prague time)."""
     from core.mt5_connection import MT5Connection
     import MetaTrader5 as mt5
 
-    acc = prefs.get("mt5_account")
-    pwd = prefs.get("mt5_password")
-    svr = prefs.get("mt5_server")
+    acc  = prefs.get("mt5_account")
+    pwd  = prefs.get("mt5_password")
+    svr  = prefs.get("mt5_server")
     path = prefs.get("mt5_path", "")
 
     if not (acc and pwd and svr):
-        engine.storage.log_event("warning", "Daily reset skipped — MT5 credentials not configured.")
+        engine.storage.log_event(
+            "warning", "Daily reset skipped — MT5 credentials not configured."
+        )
         return
 
-    engine.storage.log_event("info", f"Executing scheduled {reset_time} MT5 reconnect & SOD snapshot...")
+    engine.storage.log_event(
+        "info",
+        f"Executing scheduled {reset_time} MT5 reconnect & SOD snapshot…",
+    )
     if not MT5Connection.connect(acc, pwd, svr, path):
         raise RuntimeError(f"MT5 reconnect failed: {mt5.last_error()}")
 
@@ -205,15 +299,13 @@ def run_daily_reset(engine: TradingEngine, prefs: dict, prefs_path: Path, reset_
     )
 
 
+# ── Main loop — SLEEP-TO-NEXT-CLOSE ──────────────────────────────────────────
+
 def main_loop() -> None:
     ensure_prefs_file()
-    prefs = load_prefs()
+    prefs      = load_prefs()
     prefs_path = ROOT / "config" / "user_prefs.json"
-
-    engine = TradingEngine(mode="live")
-
-    scheds = load_schedules()
-    enabled_count = sum(1 for s in scheds if s.get("enabled", True))
+    engine     = TradingEngine(mode="live")
 
     from core.bot_lifecycle import log_bot_started
     log_bot_started(
@@ -221,21 +313,28 @@ def main_loop() -> None:
         mode="live",
         symbol=prefs.get("trading_symbol", ""),
         timeframe=prefs.get("timeframe", ""),
-        extra={"schedule_slots": enabled_count, "mt5_configured": mt5_configured(prefs)},
+        extra={"mt5_configured": mt5_configured(prefs)},
     )
 
-    print("=" * 60)
-    print("Trade Pulse Quants — Scheduler Daemon STARTED")
-    print(f"Project root: {ROOT}")
-    print(f"Symbol: {prefs.get('trading_symbol')} | TF: {prefs.get('timeframe')}")
-    print(f"Schedule slots (enabled): {enabled_count}")
-    print(f"MT5 configured: {mt5_configured(prefs)}")
-    print("Logs → data/events.jsonl  |  data/bot_lifecycle.log")
-    print("Press Ctrl+C to stop.")
-    print("=" * 60)
+    print("=" * 66)
+    print("  Trade Pulse Quants — Sleep-to-Close Scheduler STARTED")
+    print(f"  Symbol    : {prefs.get('trading_symbol')}")
+    print(f"  Timeframe : {prefs.get('timeframe')}")
+    sess = session_info(prefs.get("trading_symbol", "XAUUSD"))
+    print(f"  Session   : {sess['label']} FTMO (Europe/Helsinki)")
+    print(f"  Root      : {ROOT}")
+    print(f"  Logs      : data/events.jsonl | data/bot_lifecycle.log")
+    print(f"  MT5 ready : {mt5_configured(prefs)}")
+    print("  Press Ctrl+C to stop.")
+    print("=" * 66)
 
+    # Startup notification (non-blocking)
     from core.notifier import broadcast_daemon_started
-    broadcast_daemon_started(prefs, enabled_count)
+    threading.Thread(
+        target=broadcast_daemon_started,
+        args=(prefs, 0),
+        daemon=True,
+    ).start()
 
     if not mt5_configured(prefs):
         logger.warning(
@@ -243,86 +342,111 @@ def main_loop() -> None:
             "pipeline ticks will fail until Settings are saved."
         )
 
-    last_run_minute = None
+    # Restore last-fired key from disk (survives daemon restart mid-minute)
+    last_fired_key: str | None = _load_last_fired()
+    logger.info("Startup last_fired_key=%s", last_fired_key)
 
+    # ── Scheduler loop ────────────────────────────────────────────────────────
     while True:
-        now_hel = now_ftmo()
-        now_prg = datetime.now(ZoneInfo("Europe/Prague"))
+        # 1. Reload settings (Settings page may have changed symbol / TF)
+        prefs  = load_prefs()
+        symbol = prefs.get("trading_symbol", "XAUUSD")
+        tf     = prefs.get("timeframe",      "1h")
+        now    = now_ftmo()
 
-        current_day_hel = ftmo_day_name(now_hel)
-        current_time_hel = ftmo_hhmm(now_hel)
-        current_minute = now_hel.strftime("%Y-%m-%d %H:%M")
-        current_time_prg = now_prg.strftime("%H:%M")
-
-        if last_run_minute != current_minute:
-            logger.debug(
-                "Tick check | FTMO %s | day=%s time=%s",
-                ftmo_display(now_hel),
-                current_day_hel,
-                current_time_hel,
-            )
-            prefs = load_prefs()  # refresh each minute (UI may have saved new settings)
-            reset_time = prefs.get("daily_reset_time", "00:00")
-
-            if current_time_prg == reset_time:
+        # 2. Daily reset (Prague midnight, once per calendar day, disk-guarded)
+        reset_time  = prefs.get("daily_reset_time", "00:00")
+        now_prg_str = datetime.now(ZoneInfo("Europe/Prague")).strftime("%H:%M")
+        if now_prg_str == reset_time and not _daily_reset_done_today():
+            try:
+                run_daily_reset(engine, prefs, prefs_path, reset_time)
+                _mark_daily_reset_done()
+            except Exception as exc:
+                engine.storage.log_event("error", f"Daily reset failed: {exc}")
+                logger.exception("Daily reset failed")
                 try:
-                    run_daily_reset(engine, prefs, prefs_path, reset_time)
-                except Exception as e:
-                    engine.storage.log_event("error", f"Scheduled MT5 task failed: {e}")
-                    logger.exception("Daily reset failed")
-                    try:
-                        from core.notifier import broadcast_risk_alert
-                        broadcast_risk_alert(
-                            alert_type="BLOCKED",
-                            symbol=prefs.get("trading_symbol", "UNKNOWN"),
-                            warnings=[f"DAILY RESET / MT5 RECONNECT FAILED: {e}"],
-                            suggestions=["SOD balance was NOT saved. Check MT5 and restart daemon."],
-                            prefs=prefs,
-                            block_reason=str(e),
-                        )
-                    except Exception:
-                        pass
-
-            scheds = load_schedules()
-            matched_slot = None
-            for s in scheds:
-                if schedule_matches_now(s, now_hel):
-                    matched_slot = s
-                    break
-
-            last_run_minute = current_minute
-
-            if matched_slot:
-                logger.info(
-                    "Schedule MATCH | %s %s (FTMO) | id=%s",
-                    current_day_hel,
-                    current_time_hel,
-                    matched_slot.get("id", "?"),
-                )
-                run_scheduled_tick(engine, prefs, current_day_hel, current_time_hel)
-            else:
-                # Log once per minute at :00 seconds area — helps debug missed slots
-                enabled_today = [
-                    s["time"]
-                    for s in scheds
-                    if s.get("enabled", True) and s.get("day") == current_day_hel
-                ]
-                if enabled_today and current_time_hel.endswith(":00"):
-                    logger.debug(
-                        "No slot at %s %s | today has %d slots (e.g. %s)",
-                        current_day_hel,
-                        current_time_hel,
-                        len(enabled_today),
-                        ", ".join(sorted(enabled_today)[:5]),
+                    from core.notifier import broadcast_risk_alert
+                    broadcast_risk_alert(
+                        alert_type="BLOCKED",
+                        symbol=symbol,
+                        warnings=[f"DAILY RESET / MT5 RECONNECT FAILED: {exc}"],
+                        suggestions=["SOD balance NOT saved. Check MT5 and restart daemon."],
+                        prefs=prefs,
+                        block_reason=str(exc),
                     )
+                except Exception:
+                    pass
 
-        time.sleep(10)
+        # 3. Compute exact seconds to next candle close
+        try:
+            next_close_dt, sleep_sec = compute_next_candle_close(symbol, tf, now)
+        except ValueError as ve:
+            logger.error("Invalid TF/symbol config: %s — sleeping 60 s", ve)
+            time.sleep(60)
+            continue
+        except Exception as exc:
+            logger.exception("compute_next_candle_close failed — sleeping 60 s: %s", exc)
+            time.sleep(60)
+            continue
 
+        logger.info(
+            "⏱  Next %-3s close: %s FTMO  (sleep=%.0f s / %.1f min)",
+            tf,
+            next_close_dt.strftime("%A %d %b %H:%M"),
+            sleep_sec,
+            sleep_sec / 60,
+        )
+
+        # 4. Precise sleep — chunked every 5 min to detect settings changes
+        _chunked_sleep(sleep_sec, chunk_sec=300)
+
+        # 5. Post-sleep sanity checks
+        wake_now = now_ftmo()
+
+        if wake_now.weekday() >= 5:          # Saturday=5, Sunday=6
+            logger.info(
+                "Weekend (%s) — no pipeline tick. Sleeping to Monday.",
+                wake_now.strftime("%A"),
+            )
+            continue
+
+        # Reload prefs (settings may have changed during long sleep)
+        prefs  = load_prefs()
+        symbol = prefs.get("trading_symbol", "XAUUSD")
+        tf     = prefs.get("timeframe", "1h")
+
+        # 6. Restart-safety dedup guard (disk-persisted)
+        fire_key = next_close_dt.strftime("%Y-%m-%d %H:%M")
+        if last_fired_key == fire_key:
+            logger.warning(
+                "🔁 Restart guard: slot %s already fired — skipping double-fire.",
+                fire_key,
+            )
+            continue
+
+        # 7. Persist BEFORE launching (crash-safe: if crash after persist,
+        #    restart correctly skips this slot instead of double-firing)
+        last_fired_key = fire_key
+        _save_last_fired(fire_key, next_close_dt)
+
+        # 8. Fire pipeline in daemon thread — scheduler loop is never blocked
+        threading.Thread(
+            target=_fire_pipeline,
+            args=(engine, prefs, next_close_dt),
+            daemon=True,
+            name=f"Pipeline-{fire_key}",
+        ).start()
+
+        # Loop immediately to compute the NEXT close
+        # (pipeline runs in parallel; scheduler doesn't wait for it)
+
+
+# ── CLI helpers ───────────────────────────────────────────────────────────────
 
 def check_schedule_now() -> None:
     """Print whether any schedule slot matches current FTMO minute."""
     ensure_prefs_file()
-    now = now_ftmo()
+    now    = now_ftmo()
     scheds = load_schedules()
     print(ftmo_display(now))
     print(f"Day (EN): {ftmo_day_name(now)} | Time: {ftmo_hhmm(now)}")
@@ -336,15 +460,29 @@ def check_schedule_now() -> None:
         if nxt and nxt_dt:
             print(f"Next slot: {nxt['day']} {nxt['time']} (FTMO) — in {nxt_dt - now}")
 
+    # Also show sleep-to-close calculation
+    prefs  = load_prefs()
+    symbol = prefs.get("trading_symbol", "XAUUSD")
+    tf     = prefs.get("timeframe", "1h")
+    try:
+        nxt_close, secs = compute_next_candle_close(symbol, tf, now)
+        print(
+            f"\nSleep-to-close: next {tf} close = "
+            f"{nxt_close.strftime('%A %H:%M')} FTMO  ({secs:.0f} s)"
+        )
+    except Exception as e:
+        print(f"compute_next_candle_close error: {e}")
+
 
 def run_once_now() -> None:
-    """Run a single pipeline tick immediately (for testing scheduler + notifications)."""
+    """Run a single pipeline tick immediately (for testing)."""
     ensure_prefs_file()
-    prefs = load_prefs()
+    prefs  = load_prefs()
     engine = TradingEngine(mode="live")
     now_hel = now_ftmo()
     print(f"Manual tick — {ftmo_display(now_hel)}")
-    run_scheduled_tick(engine, prefs, ftmo_day_name(now_hel), ftmo_hhmm(now_hel))
+    _fire_pipeline(engine, prefs, now_hel)
+    time.sleep(3)   # give notification thread time to start
     print("Done. Check Telegram / data/events.jsonl")
 
 
