@@ -1,0 +1,28 @@
+---
+description: Streamlit dashboard and UI conventions
+globs: app.py,pages/**,Utilities/**
+alwaysApply: false
+---
+
+# Streamlit UI
+
+## Config I/O
+
+- Load/save prefs via `config/prefs.py` (`load_prefs`, `save_prefs`, `DEFAULT_PREFS`)
+- Do not duplicate prefs paths — use `PREFS_FILE` from prefs module when adding new pages
+
+## Charts
+
+- **UI (browser)**: Plotly in `pages/1_📈_Live_Chart.py` / `core/chart_utils.py`
+- **Daemon alerts**: mplfinance only — never Kaleido, Selenium, or headless Chrome (VPS RAM)
+
+## UI patterns
+
+- Reuse `Utilities/ui_components.py` for sidebar, CSS, status widgets
+- Settings page writes `user_prefs.json` — daemon picks up changes within chunked sleep (≤5 min)
+- Display both FTMO (Helsinki) and IST where timestamps are shown
+
+## Do not
+
+- Expose credentials in UI logs or session state dumps
+- Auto-start the trading daemon from Streamlit without explicit user action

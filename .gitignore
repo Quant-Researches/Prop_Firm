@@ -30,12 +30,15 @@ ENV/
 # ─────────────────────────────────────────────
 # Sensitive Config & Credentials
 # ─────────────────────────────────────────────
-
+config/user_prefs.json
+config/saved_config.json
+config/instrument_cache.json
 
 # ─────────────────────────────────────────────
 # Runtime Data (generated, not source)
 # ─────────────────────────────────────────────
-
+data/
+!data/.gitkeep
 
 # ─────────────────────────────────────────────
 # Streamlit

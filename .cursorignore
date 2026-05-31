@@ -1,0 +1,17 @@
+﻿# Credentials and secrets — never index for AI context
+config/user_prefs.json
+config/saved_config.json
+.streamlit/secrets.toml
+
+# Runtime / live state — large, noisy, not source code
+data/
+*.log
+
+# Python / env noise
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# MT5 terminal artifacts (if present locally)
+mt5/

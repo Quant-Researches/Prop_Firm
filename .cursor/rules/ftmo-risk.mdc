@@ -1,0 +1,34 @@
+---
+description: FTMO risk guard, OMS, and execution safety rules
+globs: core/risk_manager.py,core/execution.py,core/oms.py,core/engine.py
+alwaysApply: false
+---
+
+# FTMO Risk & Execution
+
+## Risk guard (6 checks — do not bypass)
+
+1. Daily loss limit (5% of SOD balance)
+2. Max overall drawdown (10%)
+3. Daily budget remaining > trade risk
+4. Drawdown buffer remaining > trade risk
+5. Max open positions (default: 1)
+6. News blackout (±2 min HIGH-impact, leverage > 1:30)
+
+## Order building
+
+- `build_order()` returning `None` → **block trade**, log + alert — no fallback defaults
+- Spread filter: block if spread > 10% of ATR
+- Fixed dollar risk via tick_size / tick_value from MT5 — never guess
+- Structure-aware SL: `MAX(ATR distance, structure distance)`
+- Duplicate prevention: `oms.has_open_position()` before submit
+
+## Execution
+
+- Live orders only via `mt5.order_send()` in `core/execution.py`
+- MT5 rejections → mark OMS REJECTED, log, Telegram alert
+- `engine.run_pipeline_tick()` must return block_reason / risk_warnings for notifier
+
+## Before changing this code
+
+Ask user to confirm if change affects live trading behavior. Prefer demo test: `python main.py --tick-now`.

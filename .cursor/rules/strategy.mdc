@@ -1,0 +1,46 @@
+---
+description: Dow Theory EMA strategy, indicators, and signal generation rules
+globs: core/strategy.py,Utilities/technical_indicators.py,core/signal_store.py,core/data_feed.py
+alwaysApply: false
+---
+
+# Trading Strategy
+
+## Strategy files
+
+| File | Role |
+|------|------|
+| `core/strategy.py` | `RealTimeSignalGenerator` — Dow Theory EMA cross + fractal swings |
+| `Utilities/technical_indicators.py` | EMA, ATR, RSI calculations |
+| `core/signal_store.py` | Audit trail → `data/signals.json` |
+| `core/data_feed.py` | `MarketEvent` data class |
+
+## Signal logic (do not break without user approval)
+
+**Market phase:** BULLISH = Close > Fast EMA > Slow EMA; BEARISH = inverse; else SIDEWAYS (no trade).
+
+**BUY:** BULLISH + Close > Last Swing High + optional volume/ATR filters.
+
+**SELL:** BEARISH + Close < Last Swing Low + optional volume/ATR filters.
+
+**Deduplication:** Same breakout level must not fire twice — wait for new swing high/low.
+
+## Indicators
+
+- Fast/slow EMA periods from `user_prefs.json` (`ema_fast`, `ema_slow`)
+- ATR (14), ATR slope, ATR percentile (200-bar rolling)
+- Fractal swings: 5-candle pattern, alternating high/low confirmation
+
+## Integration with pipeline
+
+- Strategy output keys: `Signal`, `Market_Phase`, `Action`, `last_high`, `last_low`, `atr`, `atr_percentile`, `data`
+- `engine.py` passes `last_high`/`last_low`/`atr` to `risk_manager.build_order()` — keep these fields stable
+- Reuse `Utilities/technical_indicators.py` — do not duplicate EMA/ATR math inline
+
+## Testing
+
+```bash
+python main.py --tick-now
+```
+
+Check `data/signals.json` and `data/events.jsonl` for signal lines.

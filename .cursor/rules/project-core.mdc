@@ -1,0 +1,38 @@
+---
+description: Trade Pulse Quants core architecture, safety, and workflow
+alwaysApply: true
+---
+
+# Trade Pulse Quants — Core Rules
+
+Production FTMO prop-firm trading bot. Real money at stake.
+
+## Architecture
+
+- **Daemon**: `main.py` — sleep-to-next-candle-close via `core/candle_timer.py`
+- **UI**: `app.py` + `pages/` (Streamlit dashboard)
+- **Pipeline**: `core/engine.py` → strategy → risk_manager → oms → execution → notifier
+- **Config**: `config/user_prefs.json` via `config/prefs.py` — **NOT** `config/config.py` (legacy Dhan API)
+
+## Non-negotiables
+
+- Never weaken FTMO risk checks in `core/risk_manager.py`
+- Never block the scheduler loop — use daemon threads for pipeline + notifications
+- Never hardcode balances, leverage, or lot sizes — read live from MT5
+- **Helsinki** (`Europe/Helsinki`): MT5 candles, scheduler, candle closes
+- **Prague** (`Europe/Prague`): daily reset, SOD balance snapshot only
+- Use `ftmo_day_name()` / `ftmo_hhmm()` — never `strftime("%A")` (breaks on non-English Windows)
+
+## Change discipline
+
+- Minimal diffs; match existing code style and patterns
+- Never commit `config/user_prefs.json`, `data/*`, credentials, or `.streamlit/secrets.toml`
+- Test on **demo account** unless user explicitly confirms live: `python main.py --tick-now`
+- When README conflicts with code, trust code (`candle_timer.py` scheduler wins over README §12)
+
+## Git / commits — user reviews first
+
+- **Never run `git commit` unless the user explicitly asks** in that message
+- After completing work, **recommend** a commit: list changed files, summarize what changed and why, suggest a commit message — then **wait for user approval**
+- Never push to remote unless explicitly requested
+- Never force-push to main/master

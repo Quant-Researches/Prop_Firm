@@ -90,8 +90,8 @@ The system is split into **two independent processes** that communicate through 
                          │  └── data/events.jsonl
 ┌────────────────────────▼────────────────────────────────────┐
 │                 BACKGROUND DAEMON (main.py)                  │
-│   Infinite loop · Checks schedule every 60 seconds          │
-│   Fires pipeline on exact day + time match (FTMO timezone)  │
+│   Sleep-to-next-candle-close (core/candle_timer.py)        │
+│   Wakes at exact bar close · Fires pipeline in thread       │
 │                                                             │
 │   ► Runs in: Terminal / Windows Service                     │
 │   ► Purpose: Autonomous trading execution                   │
@@ -495,44 +495,46 @@ Both engines render the same visual elements for consistency:
 
 ## 12. Scheduling & Automation
 
-> **Files:** `main.py`, `core/scheduler_helper.py`, `schedules.json`
+> **Files:** `main.py`, `core/candle_timer.py`, `core/ftmo_time.py`  
+> **UI only:** `schedules.json`, `pages/2_📅_Scheduler.py` (display / planning — not used for runtime execution)
 
 ### How the Scheduler Works
 
-The background daemon (`main.py`) runs an infinite loop that checks the clock every **60 seconds**:
+The background daemon (`main.py`) uses a **sleep-to-next-candle-close** loop:
 
 ```text
 while True:
-    1. Get current time in FTMO timezone (Europe/Helsinki)
-    2. Compare against all enabled schedule slots in schedules.json
-    3. If day + time matches a slot → Fire the pipeline
-    4. Mark the slot as "completed" for this minute (prevents double-firing)
-    5. Sleep 60 seconds
-    6. Repeat
+    1. Read symbol + timeframe from config/user_prefs.json
+    2. compute_next_candle_close() → exact seconds until next MT5 bar close (Helsinki time)
+    3. Sleep that duration (5-minute chunks so Settings changes apply within 5 min)
+    4. Skip weekends; dedup via data/last_fired.json (restart-safe)
+    5. Fire pipeline in a daemon thread (scheduler never blocks on execution)
+    6. Loop immediately to compute the next close
 ```
 
-### Schedule Format
+Candle closes align to **FTMO / MT5 server time (Europe/Helsinki)** and the instrument session window (Forex vs commodity hours).
 
-Schedules are stored in `schedules.json`:
+### schedules.json (UI display only)
+
+The Scheduler page writes `schedules.json` for the weekly grid and “next slot” preview. **The daemon does not poll this file for execution.** Runtime timing comes entirely from `core/candle_timer.py` + your Settings timeframe.
+
+Example format (for UI):
 ```json
 [
   { "id": "SCH_Monday_0900_A1B2C3", "day": "Monday", "time": "09:00", "enabled": true },
-  { "id": "SCH_Monday_1000_D4E5F6", "day": "Monday", "time": "10:00", "enabled": true },
-  { "id": "SCH_Friday_1500_8256EF", "day": "Friday", "time": "15:00", "enabled": true }
+  { "id": "SCH_Monday_1000_D4E5F6", "day": "Monday", "time": "10:00", "enabled": true }
 ]
 ```
-
-All times are in **FTMO timezone (Europe/Helsinki, GMT+3)**. The system automatically converts to whatever timezone the server is running in.
 
 ### Manual Testing Commands
 
 | Command | Description |
 |---|---|
-| `python main.py` | Start the daemon loop (runs forever until Ctrl+C) |
+| `python main.py` | Start the sleep-to-close daemon (runs until Ctrl+C) |
 | `python main.py --tick-now` | Fire a single pipeline tick immediately (for testing) |
-| `python main.py --check-schedule` | Print all enabled slots and show when the next one fires |
+| `python main.py --check-schedule` | Print schedule slots + next candle close / sleep time |
 
-> **Why schedule-based instead of continuous?** Forex candles close at fixed intervals (e.g., every 1 hour). Running the strategy mid-candle would produce unreliable signals because the candle hasn't finished forming. By scheduling ticks at candle-close times, every signal is based on a fully confirmed, closed candle.
+> **Why candle-close instead of continuous?** Signals must use fully closed bars. Waking at the exact bar close guarantees every tick evaluates a confirmed candle, not a forming one.
 
 ---
 

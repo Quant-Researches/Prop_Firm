@@ -1,0 +1,38 @@
+---
+description: Scheduler, candle timer, and FTMO timezone rules
+globs: main.py,core/candle_timer.py,core/ftmo_time.py,core/scheduler_helper.py,pages/2_*
+alwaysApply: false
+---
+
+# Scheduler & Timezones
+
+## Authoritative scheduler
+
+- **Runtime execution**: `compute_next_candle_close()` in `core/candle_timer.py`
+- Daemon sleeps exact seconds until next candle close, then fires pipeline in a thread
+- `schedules.json` is **UI/display only** — not read for execution timing
+
+## Timezones
+
+| Context | Zone |
+|---------|------|
+| MT5 candles, schedule slots | `Europe/Helsinki` |
+| Daily reset, SOD snapshot | `Europe/Prague` |
+
+Use `core/ftmo_time.py` helpers. Risk manager news uses UTC internally.
+
+## Safety guards in main.py
+
+- `data/last_fired.json` — restart-safe dedup (persist **before** firing)
+- `_chunked_sleep(300)` — reload settings during long sleeps
+- Weekend skip after wake (Sat/Sun → no tick)
+- Daily reset once per Prague calendar day via `data/daily_reset_date.txt`
+
+## CLI testing
+
+```bash
+python main.py --check-schedule
+python main.py --tick-now
+```
+
+Check `data/events.jsonl` after changes.
