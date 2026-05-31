@@ -225,17 +225,13 @@ def _fire_pipeline(engine: TradingEngine, prefs: dict, close_dt: datetime) -> No
 
         def _notify_crash() -> None:
             try:
-                from core.notifier import broadcast_risk_alert
-                broadcast_risk_alert(
-                    alert_type="BLOCKED",
+                from core.notifier import broadcast_order_failure
+                from core.order_failures import PIPELINE_CRASH
+                broadcast_order_failure(
+                    failure_code=PIPELINE_CRASH,
                     symbol=prefs.get("trading_symbol", "UNKNOWN"),
-                    warnings=[f"PIPELINE CRASH at {day} {time_str}: {exc}"],
-                    suggestions=[
-                        "Last tick FAILED. Check data/events.jsonl.",
-                        "Restart daemon after fixing the issue.",
-                    ],
+                    detail=f"Pipeline crash at {day} {time_str}: {exc}",
                     prefs=prefs,
-                    block_reason=str(exc),
                 )
             except Exception:
                 pass
@@ -365,14 +361,13 @@ def main_loop() -> None:
                 engine.storage.log_event("error", f"Daily reset failed: {exc}")
                 logger.exception("Daily reset failed")
                 try:
-                    from core.notifier import broadcast_risk_alert
-                    broadcast_risk_alert(
-                        alert_type="BLOCKED",
+                    from core.notifier import broadcast_order_failure
+                    from core.order_failures import DAILY_RESET_FAILED
+                    broadcast_order_failure(
+                        failure_code=DAILY_RESET_FAILED,
                         symbol=symbol,
-                        warnings=[f"DAILY RESET / MT5 RECONNECT FAILED: {exc}"],
-                        suggestions=["SOD balance NOT saved. Check MT5 and restart daemon."],
+                        detail=f"Daily reset / MT5 reconnect failed: {exc}",
                         prefs=prefs,
-                        block_reason=str(exc),
                     )
                 except Exception:
                     pass

@@ -12,6 +12,20 @@ import logging
 import requests
 import pytz
 from core.strategy import SignalEvent
+from core.order_failures import (
+    OrderBuildResult,
+    ORDER_INVALID_SIGNAL,
+    ORDER_INVALID_TICK_DATA,
+    ORDER_SPREAD_TOO_HIGH,
+    ORDER_SL_TOO_WIDE,
+    ORDER_INVALID_RISK_MATH,
+    FTMO_DAILY_LOSS_LIMIT,
+    FTMO_MAX_DRAWDOWN,
+    FTMO_DAILY_BUDGET,
+    FTMO_DD_BUFFER,
+    FTMO_MAX_POSITIONS,
+    FTMO_NEWS_BLACKOUT,
+)
 
 # ---------------------------------------------------------------------------
 # FTMO uses TWO separate timezones:
@@ -126,6 +140,7 @@ class RiskEvaluation:
     daily_loss_remaining: float = 0.0
     max_dd_remaining: float = 0.0
     block_reason: str = ""
+    block_code: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +209,7 @@ class RiskManager:
         suggestions = []
         approved = True
         block_reason = ""
+        block_code = ""
 
         daily_loss_limit = self.starting_balance * self.daily_loss_limit_pct
         max_dd_limit     = self.starting_balance * self.max_drawdown_pct
@@ -212,6 +228,7 @@ class RiskManager:
         # Check 1: Daily Loss Limit (5%)
         if daily_loss_amount >= daily_loss_limit:
             approved = False
+            block_code = FTMO_DAILY_LOSS_LIMIT
             block_reason = ("Daily loss limit reached: "
                 + str(round(daily_loss_amount, 2)) + " / " + str(round(daily_loss_limit, 2)))
             warnings.append("DAILY LOSS LIMIT HIT: Lost " + str(round(daily_loss_amount, 2))
@@ -230,6 +247,7 @@ class RiskManager:
         # Check 2: Max Overall Drawdown (10%)
         if total_drawdown >= max_dd_limit:
             approved = False
+            block_code = FTMO_MAX_DRAWDOWN
             block_reason = ("Max drawdown breached: "
                 + str(round(total_drawdown, 2)) + " / " + str(round(max_dd_limit, 2)))
             warnings.append("MAX DRAWDOWN BREACHED: Account down " + str(round(total_drawdown, 2))
@@ -249,6 +267,7 @@ class RiskManager:
         # Check 3: Daily budget vs trade risk
         if approved and daily_remaining < self.risk_per_trade:
             approved = False
+            block_code = FTMO_DAILY_BUDGET
             block_reason = ("Daily room " + str(round(daily_remaining, 2))
                 + " < trade risk " + str(round(self.risk_per_trade, 2)))
             warnings.append("TRADE BLOCKED: Only " + str(round(daily_remaining, 2))
@@ -258,6 +277,7 @@ class RiskManager:
         # Check 4: Max DD buffer vs trade risk
         if approved and dd_remaining < self.risk_per_trade:
             approved = False
+            block_code = FTMO_DD_BUFFER
             block_reason = ("DD room " + str(round(dd_remaining, 2))
                 + " < trade risk " + str(round(self.risk_per_trade, 2)))
             warnings.append("TRADE BLOCKED: Only " + str(round(dd_remaining, 2))
@@ -270,6 +290,7 @@ class RiskManager:
         live_pos = open_positions if open_positions >= 0 else self._open_positions
         if approved and live_pos >= self.max_positions:
             approved = False
+            block_code = FTMO_MAX_POSITIONS
             block_reason = "Max positions (" + str(self.max_positions) + ") already open"
             source = "MT5 live" if open_positions >= 0 else "internal counter (MT5 unavailable)"
             warnings.append("TRADE BLOCKED: " + str(live_pos)
@@ -281,6 +302,7 @@ class RiskManager:
             blocked, reason, warn, suggest = self._check_news_blackout(symbol, leverage)
             if blocked:
                 approved = False
+                block_code = FTMO_NEWS_BLACKOUT
                 block_reason = reason
             if warn:
                 warnings.append(warn)
@@ -306,6 +328,7 @@ class RiskManager:
             daily_loss_remaining=daily_remaining,
             max_dd_remaining=dd_remaining,
             block_reason=block_reason,
+            block_code=block_code,
         )
 
     # -------------------------------------------------------------------------
@@ -449,24 +472,31 @@ class RiskManager:
         leverage: int = 100,
         free_margin: float = 0.0,
         contract_size: float = 100_000.0,
-    ) -> Optional[OrderEvent]:
+    ) -> OrderBuildResult:
         """
         Builds a fully sized OrderEvent using quantitative ATR logic.
         Enforces EXACTLY $100 risk and 1:2 R:R ($200 target).
+        Returns OrderBuildResult with order or failure_code + message.
         """
         if signal not in ("BUY", "SELL"):
-            logger.error(f"build_order: invalid signal {repr(signal)}")
-            return None
+            msg = f"build_order: invalid signal {repr(signal)}"
+            logger.error(msg)
+            return OrderBuildResult(failure_code=ORDER_INVALID_SIGNAL, message=msg)
         if atr <= 0 or tick_size <= 0 or tick_value <= 0:
-            logger.error(f"build_order: invalid data atr={atr} tick_size={tick_size} tick_value={tick_value}")
-            return None
+            msg = f"build_order: invalid data atr={atr} tick_size={tick_size} tick_value={tick_value}"
+            logger.error(msg)
+            return OrderBuildResult(failure_code=ORDER_INVALID_TICK_DATA, message=msg)
 
         # --- Professional Validation Filters ---
         # 1. Spread Sanity Check
         max_allowed_spread = atr * 0.10
         if live_spread > max_allowed_spread:
-            logger.warning(f"TRADE BLOCKED: Spread ({live_spread:.5f}) too high for current ATR ({atr:.5f}). Max allowed: {max_allowed_spread:.5f}")
-            return None
+            msg = (
+                f"Spread ({live_spread:.5f}) exceeds 10% of ATR ({atr:.5f}). "
+                f"Max allowed spread: {max_allowed_spread:.5f}"
+            )
+            logger.warning(f"TRADE BLOCKED: {msg}")
+            return OrderBuildResult(failure_code=ORDER_SPREAD_TOO_HIGH, message=msg)
 
         # --- Volatility Regime Logic ---
         atr_multiplier = self._classify_volatility(atr_percentile)
@@ -488,8 +518,12 @@ class RiskManager:
             final_sl_distance = min_sl
             logger.warning(f"build_order: SL below 5-tick floor. Adjusted to {min_sl}")
         if final_sl_distance > max_sl:
-            logger.warning(f"TRADE BLOCKED: SL distance ({final_sl_distance:.5f}) exceeds extreme maximum ({max_sl:.5f}).")
-            return None
+            msg = (
+                f"SL distance ({final_sl_distance:.5f}) exceeds maximum ({max_sl:.5f}, 5% of price). "
+                f"ATR×{atr_multiplier}={atr_stop_distance:.5f}, structure={structure_stop_distance:.5f}"
+            )
+            logger.warning(f"TRADE BLOCKED: {msg}")
+            return OrderBuildResult(failure_code=ORDER_SL_TOO_WIDE, message=msg)
 
         # --- Take Profit Engine ---
         # Fixed 1:2 R:R
@@ -509,8 +543,9 @@ class RiskManager:
         risk_per_lot = sl_ticks * tick_value
         
         if risk_per_lot <= 0:
-            logger.error(f"build_order: invalid risk_per_lot={risk_per_lot}")
-            return None
+            msg = f"build_order: invalid risk_per_lot={risk_per_lot} (sl_ticks={sl_ticks}, tick_value={tick_value})"
+            logger.error(msg)
+            return OrderBuildResult(failure_code=ORDER_INVALID_RISK_MATH, message=msg)
 
         # position_size = risk_amount / (stop_loss_pips * pip_value)
         lots = self.risk_per_trade / risk_per_lot
@@ -543,11 +578,13 @@ class RiskManager:
             f"| Spread={live_spread:.5f}"
         )
 
-        return OrderEvent(
-            symbol=symbol, side=signal, qty=lots,
-            order_type="MARKET", limit_price=close_price,
-            stop_loss=sl, take_profit=tp,
-            est_loss_usd=est_loss, est_profit_usd=est_profit,
+        return OrderBuildResult(
+            order=OrderEvent(
+                symbol=symbol, side=signal, qty=lots,
+                order_type="MARKET", limit_price=close_price,
+                stop_loss=sl, take_profit=tp,
+                est_loss_usd=est_loss, est_profit_usd=est_profit,
+            ),
         )
 
     # -------------------------------------------------------------------------

@@ -17,6 +17,18 @@ from core.signal_store import save_signal
 logger = logging.getLogger("TradingEngine")
 
 from core.mt5_data import fetch_mt5_candles, fetch_mt5_ltp
+from core.order_failures import (
+    DATA_FETCH_FAILED,
+    FTMO_WARNING,
+    MT5_SYMBOL_UNAVAILABLE,
+    MT5_ACCOUNT_UNAVAILABLE,
+    STRATEGY_ATR_INVALID,
+    ORDER_BUILD_FAILED,
+    OMS_DUPLICATE_POSITION,
+    classify_mt5_execution_error,
+)
+from core.notifier import broadcast_order_failure, broadcast_risk_alert
+
 
 class TradingEngine:
     def __init__(self, mode="live"):
@@ -73,18 +85,15 @@ class TradingEngine:
         if df is None or df.empty:
             self.storage.log_event("error", f"Data fetch failed: {err}")
             try:
-                from core.notifier import broadcast_risk_alert
-                broadcast_risk_alert(
-                    alert_type="BLOCKED",
+                broadcast_order_failure(
+                    failure_code=DATA_FETCH_FAILED,
                     symbol=sym,
-                    warnings=[f"DATA FETCH FAILED: {err}"],
-                    suggestions=["Check MT5 connection and symbol visibility in MarketWatch."],
+                    detail=f"Data feed error: {err}",
                     prefs=prefs,
-                    block_reason=f"Data feed error: {err}",
                 )
             except Exception as _ne:
                 logger.warning(f"Notifier failed on data fetch error: {_ne}")
-            return {"error": err}
+            return {"error": err, "symbol": sym, "failure_code": DATA_FETCH_FAILED}
             
         self.storage.log_event("market", f"Fetched {len(df)} candles via {source}")
         
@@ -148,6 +157,7 @@ class TradingEngine:
         _fill  = None
         _trade_blocked = False
         _block_reason = ""
+        _failure_code = ""
         _risk_warnings: list = []
         if sig in ["BUY", "SELL"] and execution_mode == "MetaTrader5":
             strategy_df = result.get("data")
@@ -206,34 +216,34 @@ class TradingEngine:
             # Broadcast risk alerts to all notification channels
             if risk_eval.warnings or not risk_eval.approved:
                 try:
-                    from core.notifier import broadcast_risk_alert
-                    # Determine alert type from block reason content
                     if not risk_eval.approved:
-                        atype = (
-                            "NEWS_BLACKOUT"
-                            if "NEWS BLACKOUT" in risk_eval.block_reason
-                            else "BLOCKED"
+                        fc = risk_eval.block_code or "FTMO_RULES_BLOCKED"
+                        broadcast_order_failure(
+                            failure_code=fc,
+                            symbol=sym,
+                            detail=risk_eval.block_reason or "FTMO risk guard blocked trade",
+                            prefs=prefs,
+                            signal=sig,
+                            warnings=risk_eval.warnings,
+                            suggestions=risk_eval.suggestions,
                         )
                     else:
-                        atype = (
-                            "NEWS_BLACKOUT"
-                            if any("NEWS" in w for w in risk_eval.warnings)
-                            else "FTMO_WARNING"
+                        broadcast_risk_alert(
+                            alert_type="FTMO_WARNING",
+                            symbol=sym,
+                            warnings=risk_eval.warnings,
+                            suggestions=risk_eval.suggestions,
+                            prefs=prefs,
+                            failure_code=FTMO_WARNING,
+                            signal=sig,
                         )
-                    broadcast_risk_alert(
-                        alert_type=atype,
-                        symbol=sym,
-                        warnings=risk_eval.warnings,
-                        suggestions=risk_eval.suggestions,
-                        prefs=prefs,
-                        block_reason=risk_eval.block_reason,
-                    )
                 except Exception as _ne:
                     logger.warning(f"Risk alert broadcast failed: {_ne}")
 
             if not risk_eval.approved:
                 _trade_blocked = True
                 _block_reason = risk_eval.block_reason or "FTMO risk guard blocked trade"
+                _failure_code = risk_eval.block_code or "FTMO_RULES_BLOCKED"
                 _risk_warnings = list(risk_eval.warnings)
                 self.storage.log_event("risk",
                     f"Trade BLOCKED by FTMO Risk Guard: {risk_eval.block_reason}")
@@ -248,15 +258,14 @@ class TradingEngine:
                     _trade_blocked = True
                     _block_reason = _sym_err
                     self.storage.log_event("risk", f"Cannot build order: {_sym_err}")
+                    _failure_code = MT5_SYMBOL_UNAVAILABLE
                     try:
-                        from core.notifier import broadcast_risk_alert
-                        broadcast_risk_alert(
-                            alert_type="BLOCKED",
+                        broadcast_order_failure(
+                            failure_code=MT5_SYMBOL_UNAVAILABLE,
                             symbol=sym,
-                            warnings=[f"SYMBOL INFO UNAVAILABLE: {_sym_err}"],
-                            suggestions=["Open MT5 terminal → MarketWatch → right-click → Show All → find and add the symbol."],
+                            detail=_sym_err,
                             prefs=prefs,
-                            block_reason=_sym_err,
+                            signal=sig,
                         )
                     except Exception as _ne:
                         logger.warning(f"Notifier failed on symbol_info error: {_ne}")
@@ -272,15 +281,14 @@ class TradingEngine:
                         _trade_blocked = True
                         _block_reason = _acc_err
                         self.storage.log_event("risk", f"Cannot build order: {_acc_err}")
+                        _failure_code = MT5_ACCOUNT_UNAVAILABLE
                         try:
-                            from core.notifier import broadcast_risk_alert
-                            broadcast_risk_alert(
-                                alert_type="BLOCKED",
+                            broadcast_order_failure(
+                                failure_code=MT5_ACCOUNT_UNAVAILABLE,
                                 symbol=sym,
-                                warnings=[f"MT5 ACCOUNT INFO UNAVAILABLE: {_acc_err}"],
-                                suggestions=["Re-check MT5 login credentials in Settings and restart the bot."],
+                                detail=_acc_err,
                                 prefs=prefs,
-                                block_reason=_acc_err,
+                                signal=sig,
                             )
                         except Exception as _ne:
                             logger.warning(f"Notifier failed on account_info error: {_ne}")
@@ -310,21 +318,20 @@ class TradingEngine:
                             _trade_blocked = True
                             _block_reason = _atr_err
                             self.storage.log_event("risk", _atr_err)
+                            _failure_code = STRATEGY_ATR_INVALID
                             try:
-                                from core.notifier import broadcast_risk_alert
-                                broadcast_risk_alert(
-                                    alert_type="BLOCKED",
+                                broadcast_order_failure(
+                                    failure_code=STRATEGY_ATR_INVALID,
                                     symbol=sym,
-                                    warnings=[f"ATR COMPUTATION FAILED: {_atr_err}"],
-                                    suggestions=["Check strategy indicators."],
+                                    detail=_atr_err,
                                     prefs=prefs,
-                                    block_reason=_atr_err,
+                                    signal=sig,
                                 )
                             except Exception as _ne:
                                 logger.warning(f"Notifier failed on ATR error: {_ne}")
                         else:
                             # --- Build the order via Quantitative Risk Engine ---
-                            order = self.risk_manager.build_order(
+                            build_result = self.risk_manager.build_order(
                                 signal=sig,
                                 symbol=sym,
                                 close_price=close_px,
@@ -340,24 +347,25 @@ class TradingEngine:
                                 contract_size=contract_size,
                             )
 
-                            if order is None:
-                                _order_err = f"RiskManager.build_order() returned None for {sig} {sym} — margin/leverage constraint or invalid tick data."
+                            if not build_result.order:
+                                _fc = build_result.failure_code or ORDER_BUILD_FAILED
+                                _order_err = build_result.message or f"Order build failed for {sig} {sym}"
                                 _trade_blocked = True
                                 _block_reason = _order_err
-                                self.storage.log_event("risk", _order_err)
+                                _failure_code = _fc
+                                self.storage.log_event("risk", f"[{_fc}] {_order_err}")
                                 try:
-                                    from core.notifier import broadcast_risk_alert
-                                    broadcast_risk_alert(
-                                        alert_type="BLOCKED",
+                                    broadcast_order_failure(
+                                        failure_code=_fc,
                                         symbol=sym,
-                                        warnings=[f"ORDER BUILD FAILED: {_order_err}"],
-                                        suggestions=["Check free margin, leverage, and tick data in MT5. Signal was valid but position could not be sized."],
+                                        detail=_order_err,
                                         prefs=prefs,
-                                        block_reason=_order_err,
+                                        signal=sig,
                                     )
                                 except Exception as _ne:
                                     logger.warning(f"Notifier failed on order build error: {_ne}")
                             else:
+                                order = build_result.order
                                 self.storage.log_event(
                                     "order",
                                     f"OMS Submit: {sig} {order.qty:.2f}L {sym}"
@@ -372,7 +380,18 @@ class TradingEngine:
                                     _dup = f"OMS blocked duplicate {sig} {sym} — position already open."
                                     _trade_blocked = True
                                     _block_reason = _dup
+                                    _failure_code = OMS_DUPLICATE_POSITION
                                     self.storage.log_event("risk", _dup)
+                                    try:
+                                        broadcast_order_failure(
+                                            failure_code=OMS_DUPLICATE_POSITION,
+                                            symbol=sym,
+                                            detail=_dup,
+                                            prefs=prefs,
+                                            signal=sig,
+                                        )
+                                    except Exception as _ne:
+                                        logger.warning(f"Notifier failed on OMS duplicate: {_ne}")
                                 else:
                                     order_id = self.oms.submit(order)
                                     order.order_id = order_id
@@ -389,17 +408,20 @@ class TradingEngine:
                                         self.portfolio.on_fill(fill)
                                     except Exception as _exec_err:
                                         self.oms.mark_rejected(order_id, str(_exec_err))
-                                        _exec_msg = f"MT5 order_send FAILED: {_exec_err}"
-                                        self.storage.log_event("error", _exec_msg)
+                                        _exec_msg = str(_exec_err)
+                                        _fc = classify_mt5_execution_error(_exec_msg)
+                                        _trade_blocked = True
+                                        _block_reason = _exec_msg
+                                        _failure_code = _fc
+                                        self.storage.log_event("error", f"[{_fc}] MT5 order_send FAILED: {_exec_msg}")
                                         try:
-                                            from core.notifier import broadcast_risk_alert
-                                            broadcast_risk_alert(
-                                                alert_type="BLOCKED",
+                                            broadcast_order_failure(
+                                                failure_code=_fc,
                                                 symbol=sym,
-                                                warnings=[f"EXECUTION FAILURE: {_exec_msg}"],
-                                                suggestions=["Check MT5 terminal immediately — order may NOT have been placed. Verify manually."],
+                                                detail=_exec_msg,
                                                 prefs=prefs,
-                                                block_reason=_exec_msg,
+                                                signal=sig,
+                                                order_id=order_id,
                                             )
                                         except Exception as _ne:
                                             logger.warning(f"Notifier failed on execution error: {_ne}")
@@ -459,5 +481,6 @@ class TradingEngine:
             "last_low": result.get('last_low', None) if result else None,
             "trade_blocked": _trade_blocked if sig in ("BUY", "SELL") else False,
             "block_reason": _block_reason,
+            "failure_code": _failure_code if sig in ("BUY", "SELL") else "",
             "risk_warnings": _risk_warnings,
         }

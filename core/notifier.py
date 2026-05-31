@@ -7,6 +7,14 @@ from email.message import EmailMessage
 import winsound
 import threading
 
+from core.order_failures import (
+    FAILURE_META,
+    FTMO_WARNING,
+    SYSTEM_INFO,
+    classify_ftmo_block,
+    meta_for,
+)
+
 logger = logging.getLogger("Notifier")
 
 _THREAD_JOIN_TIMEOUT = 45  # seconds — wait for alert delivery before scheduler continues
@@ -157,7 +165,12 @@ def _format_telegram_message(payload: dict, prefs: dict) -> str:
         msg += f"🚨 *ERROR:* {escape_md(err)}\n"
 
     if payload.get("trade_blocked"):
-        msg += f"\n🚫 *Trade Blocked:* {escape_md(payload.get('block_reason', 'Risk guard'))}\n"
+        fc = payload.get("failure_code", "")
+        if fc:
+            m = meta_for(fc)
+            msg += f"\n🚫 *{escape_md(m.heading)}*\n"
+            msg += "*Category:* " + escape_md(m.category) + "\n"
+        msg += "*Reason:* " + escape_md(payload.get("block_reason", "Risk guard")) + "\n"
         for w in payload.get("risk_warnings") or []:
             msg += escape_md(w) + "\n"
 
@@ -232,20 +245,70 @@ def broadcast_daemon_started(prefs: dict, schedule_count: int = 0) -> None:
         suggestions=suggestions,
         prefs=prefs,
         block_reason="Daemon online",
+        failure_code=SYSTEM_INFO,
     )
 
 
+def _escape_md(text) -> str:
+    if not isinstance(text, str):
+        text = str(text)
+    escape_chars = r"_*[]()~`>#+-=|{}.!"
+    return "".join(f"\\{c}" if c in escape_chars else c for c in text)
+
+
+def _format_order_failure_telegram(
+    failure_code: str,
+    symbol: str,
+    detail: str,
+    signal: str = "",
+    warnings: list | None = None,
+    suggestions: list | None = None,
+    order_id: str = "",
+) -> str:
+    """Telegram body with category-specific heading."""
+    m = meta_for(failure_code)
+    msg = "*TRADE PULSE QUANTS*\n"
+    msg += "*" + _escape_md(m.heading) + "*\n\n"
+    msg += "*Category:* " + _escape_md(m.category) + "\n"
+    if symbol:
+        msg += "*Symbol:* " + _escape_md(symbol) + "\n"
+    if signal and signal in ("BUY", "SELL"):
+        msg += "*Signal:* " + _escape_md(signal) + "\n"
+    if order_id:
+        msg += "*Order ID:* " + _escape_md(order_id) + "\n"
+    if detail:
+        msg += "*Reason:* " + _escape_md(detail) + "\n"
+    if warnings:
+        msg += "\n*Details:*\n"
+        for w in warnings:
+            msg += _escape_md(w) + "\n"
+    if suggestions:
+        msg += "\n*Action:*\n"
+        for s in suggestions:
+            msg += _escape_md(s) + "\n"
+    elif m.suggestions:
+        msg += "\n*Action:*\n"
+        for s in m.suggestions:
+            msg += _escape_md(s) + "\n"
+    return msg
+
+
 def _format_risk_telegram_message(alert_type: str, symbol: str, warnings: list,
-                                   suggestions: list, block_reason: str = "") -> str:
+                                   suggestions: list, block_reason: str = "",
+                                   failure_code: str = "", signal: str = "") -> str:
     """
     Formats a risk/news alert into a MarkdownV2 Telegram message.
-    alert_type: "BLOCKED" | "WARNING" | "NEWS_BLACKOUT" | "FTMO_WARNING"
+    When failure_code is set, uses the specific heading from order_failures registry.
     """
-    def escape_md(text):
-        if not isinstance(text, str):
-            text = str(text)
-        escape_chars = r"_*[]()~`>#+-=|{}.!"
-        return "".join(f"\\{c}" if c in escape_chars else c for c in text)
+    if failure_code:
+        return _format_order_failure_telegram(
+            failure_code=failure_code,
+            symbol=symbol,
+            detail=block_reason,
+            signal=signal,
+            warnings=warnings,
+            suggestions=suggestions,
+        )
 
     icons = {
         "BLOCKED":       "TRADE BLOCKED",
@@ -257,20 +320,95 @@ def _format_risk_telegram_message(alert_type: str, symbol: str, warnings: list,
     header = icons.get(alert_type, "RISK ALERT")
 
     msg = "*TRADE PULSE QUANTS*\n"
-    msg += "*" + escape_md(header) + "*\n\n"
+    msg += "*" + _escape_md(header) + "*\n\n"
     if symbol:
-        msg += "*Symbol:* " + escape_md(symbol) + "\n"
+        msg += "*Symbol:* " + _escape_md(symbol) + "\n"
+    if signal and signal in ("BUY", "SELL"):
+        msg += "*Signal:* " + _escape_md(signal) + "\n"
     if block_reason:
-        msg += "*Reason:* " + escape_md(block_reason) + "\n"
+        msg += "*Reason:* " + _escape_md(block_reason) + "\n"
     if warnings:
         msg += "\n*Details:*\n"
         for w in warnings:
-            msg += escape_md(w) + "\n"
+            msg += _escape_md(w) + "\n"
     if suggestions:
         msg += "\n*Action:*\n"
         for s in suggestions:
-            msg += escape_md(s) + "\n"
+            msg += _escape_md(s) + "\n"
     return msg
+
+
+def broadcast_order_failure(
+    failure_code: str,
+    symbol: str,
+    detail: str,
+    prefs: dict,
+    signal: str = "",
+    warnings: list | None = None,
+    suggestions: list | None = None,
+    order_id: str = "",
+) -> None:
+    """
+    Broadcast a categorized trade/order failure with a specific heading per failure_code.
+    See core/order_failures.py for all codes and headings.
+    """
+    m = meta_for(failure_code)
+    merged_suggestions = list(suggestions) if suggestions else list(m.suggestions)
+    merged_warnings = list(warnings) if warnings else []
+    if detail and detail not in merged_warnings:
+        merged_warnings.insert(0, detail)
+
+    tg_msg = _format_order_failure_telegram(
+        failure_code=failure_code,
+        symbol=symbol,
+        detail=detail,
+        signal=signal,
+        warnings=merged_warnings,
+        suggestions=merged_suggestions,
+        order_id=order_id,
+    )
+    plain_lines = [m.heading, f"Category: {m.category}", f"Symbol: {symbol}"]
+    if signal:
+        plain_lines.append(f"Signal: {signal}")
+    if order_id:
+        plain_lines.append(f"Order ID: {order_id}")
+    plain_lines.append(f"Reason: {detail}")
+    plain_lines.extend(merged_warnings)
+    plain_lines.extend(merged_suggestions)
+    plain_msg = "\n".join(plain_lines)
+    title = f"Trade Pulse — {m.heading}"
+
+    threads = []
+    if prefs.get("alert_desktop", True):
+        threads.append(threading.Thread(
+            target=send_windows_notification,
+            args=(title[:64], plain_msg[:256]),
+        ))
+    if prefs.get("alert_sound", True) and m.play_sound:
+        threads.append(threading.Thread(target=play_alert_sound))
+    if prefs.get("alert_telegram", True):
+        threads.append(threading.Thread(
+            target=send_telegram_alert,
+            args=(
+                prefs.get("telegram_bot_token", ""),
+                prefs.get("telegram_chat_id", ""),
+                tg_msg,
+                None,
+            ),
+        ))
+    if prefs.get("alert_email", True):
+        threads.append(threading.Thread(
+            target=send_email_alert,
+            args=(
+                prefs.get("gmail_sender", ""),
+                prefs.get("gmail_app_password", ""),
+                prefs.get("gmail_receiver", ""),
+                title,
+                plain_msg,
+                None,
+            ),
+        ))
+    _run_threads(threads)
 
 
 def broadcast_risk_alert(
@@ -280,60 +418,84 @@ def broadcast_risk_alert(
     suggestions: list,
     prefs: dict,
     block_reason: str = "",
+    failure_code: str = "",
+    signal: str = "",
 ):
     """
-    Broadcasts FTMO risk and news blackout alerts across all enabled channels.
-
-    alert_type options:
-        "BLOCKED"       - trade blocked by FTMO rules (daily loss, DD, max positions)
-        "NEWS_BLACKOUT" - trade blocked by news window (leverage > 1:30)
-        "FTMO_WARNING"  - approaching daily/DD limits but trade not yet blocked
-        "WARNING"       - generic risk warning
-
-    Channels: Desktop Toast, Sound, Telegram, Email (same prefs flags as trade alerts).
+    Broadcasts FTMO risk and news alerts. Prefer failure_code for specific headings.
+    See core/order_failures.py for all failure codes.
     """
-    tg_msg    = _format_risk_telegram_message(alert_type, symbol, warnings, suggestions, block_reason)
+    if failure_code:
+        broadcast_order_failure(
+            failure_code=failure_code,
+            symbol=symbol,
+            detail=block_reason or (warnings[0] if warnings else ""),
+            prefs=prefs,
+            signal=signal,
+            warnings=warnings,
+            suggestions=suggestions,
+        )
+        return
+
+    if alert_type == "NEWS_BLACKOUT":
+        fc = "FTMO_NEWS_BLACKOUT"
+    elif alert_type == "FTMO_WARNING":
+        fc = FTMO_WARNING
+    elif alert_type == "INFO":
+        fc = SYSTEM_INFO
+    elif alert_type == "BLOCKED" and block_reason:
+        fc = classify_ftmo_block(block_reason)
+    else:
+        fc = ""
+
+    tg_msg = _format_risk_telegram_message(
+        alert_type, symbol, warnings, suggestions, block_reason,
+        failure_code=fc, signal=signal,
+    )
     plain_msg = "\n".join(warnings + suggestions)
-    title_map = {
-        "BLOCKED":       "Trade BLOCKED - FTMO Guard",
-        "NEWS_BLACKOUT": "NEWS BLACKOUT Active",
-        "FTMO_WARNING":  "FTMO Risk Warning",
-        "WARNING":       "Risk Alert",
-    }
-    title = title_map.get(alert_type, "Risk Alert")
+    if fc:
+        title = f"Trade Pulse — {meta_for(fc).heading}"
+        play_sound = meta_for(fc).play_sound
+    else:
+        title_map = {
+            "BLOCKED":       "Trade BLOCKED - FTMO Guard",
+            "NEWS_BLACKOUT": "NEWS BLACKOUT Active",
+            "FTMO_WARNING":  "FTMO Risk Warning",
+            "WARNING":       "Risk Alert",
+            "INFO":          "System Update",
+        }
+        title = title_map.get(alert_type, "Risk Alert")
+        play_sound = alert_type in ("BLOCKED", "NEWS_BLACKOUT")
 
     threads = []
-
     if prefs.get("alert_desktop", True):
-        t = threading.Thread(target=send_windows_notification, args=(title, plain_msg[:256]))
-        threads.append(t)
-
-    # Sound: use exclamation for blocks, default beep for warnings
-    if prefs.get("alert_sound", True):
-        if alert_type in ("BLOCKED", "NEWS_BLACKOUT"):
-            t = threading.Thread(target=play_alert_sound)
-            threads.append(t)
-
+        threads.append(threading.Thread(
+            target=send_windows_notification, args=(title[:64], plain_msg[:256]),
+        ))
+    if prefs.get("alert_sound", True) and play_sound:
+        threads.append(threading.Thread(target=play_alert_sound))
     if prefs.get("alert_telegram", True):
-        t = threading.Thread(target=send_telegram_alert, args=(
-            prefs.get("telegram_bot_token", ""),
-            prefs.get("telegram_chat_id", ""),
-            tg_msg,
-            None,
+        threads.append(threading.Thread(
+            target=send_telegram_alert,
+            args=(
+                prefs.get("telegram_bot_token", ""),
+                prefs.get("telegram_chat_id", ""),
+                tg_msg,
+                None,
+            ),
         ))
-        threads.append(t)
-
     if prefs.get("alert_email", True):
-        t = threading.Thread(target=send_email_alert, args=(
-            prefs.get("gmail_sender", ""),
-            prefs.get("gmail_app_password", ""),
-            prefs.get("gmail_receiver", ""),
-            "Trade Pulse Quants - " + title,
-            plain_msg,
-            None,
+        threads.append(threading.Thread(
+            target=send_email_alert,
+            args=(
+                prefs.get("gmail_sender", ""),
+                prefs.get("gmail_app_password", ""),
+                prefs.get("gmail_receiver", ""),
+                "Trade Pulse Quants - " + title,
+                plain_msg,
+                None,
+            ),
         ))
-        threads.append(t)
-
     _run_threads(threads)
 
 
@@ -346,24 +508,20 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
     sym = (result or {}).get("symbol", prefs.get("trading_symbol", "UNKNOWN"))
 
     if not result:
-        broadcast_risk_alert(
-            alert_type="WARNING",
+        broadcast_order_failure(
+            failure_code="PIPELINE_EMPTY",
             symbol=sym,
-            warnings=["Pipeline returned no result (empty or insufficient data)."],
-            suggestions=["Check MT5 connection and bar_count in Settings."],
+            detail="Pipeline returned no result (empty or insufficient data).",
             prefs=prefs,
-            block_reason="Empty pipeline result",
         )
         return
 
     if result.get("error"):
-        broadcast_risk_alert(
-            alert_type="BLOCKED",
+        broadcast_order_failure(
+            failure_code="DATA_FETCH_FAILED",
             symbol=sym,
-            warnings=[f"DATA / PIPELINE ERROR: {result.get('error')}"],
-            suggestions=["Verify MT5 is running and symbol is in MarketWatch."],
+            detail=str(result.get("error")),
             prefs=prefs,
-            block_reason=str(result.get("error")),
         )
         return
         
@@ -375,6 +533,7 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
     fill = result.get('fill')
     trade_blocked = bool(result.get("trade_blocked"))
     block_reason = result.get("block_reason", "")
+    failure_code = result.get("failure_code", "")
 
     # Skip HOLD-only pings when user disabled them (signals/blocks/fills always notify)
     notify_on_hold = prefs.get("notify_on_hold", True)
@@ -412,6 +571,7 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
         "source": src,
         "trade_blocked": trade_blocked,
         "block_reason": block_reason,
+        "failure_code": failure_code,
         "risk_warnings": result.get("risk_warnings", []),
         "fill": bool(fill),
     }
