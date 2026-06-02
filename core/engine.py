@@ -1,11 +1,11 @@
-import json
 from datetime import datetime
-from pathlib import Path
 import logging
 import pandas as pd
 import numpy as np
 import MetaTrader5 as mt5
 
+from config.prefs import load_prefs, save_prefs
+from core.ftmo_account import snapshot_from_mt5_account
 from core.strategy import RealTimeSignalGenerator
 from core.risk_manager import OrderEvent, RiskManager
 from core.oms import OMS
@@ -47,18 +47,33 @@ class TradingEngine:
         self.execution = ExecutionEngine(mode=mode)
         self.portfolio = Portfolio()
         self.strategy = None
-        
-    def load_prefs(self):
-        p = Path("config/user_prefs.json")
-        if p.exists():
-            try:
-                return json.loads(p.read_text())
-            except:
-                pass
-        return {}
+        self._strategy_key: tuple[str, str] | None = None
+
+    def _sync_strategy(self, prefs: dict, sym: str, tf: str) -> None:
+        """Keep strategy instance aligned with Settings (symbol, TF, filters)."""
+        key = (sym, tf)
+        if not self.strategy or self._strategy_key != key:
+            self.strategy = RealTimeSignalGenerator(
+                stock_symbol=sym,
+                sec_id=sym,
+                interval=tf,
+                use_vol_filter=prefs.get("use_vol_filter", False),
+                use_atr_filter=prefs.get("use_atr_filter", True),
+                ema_fast=prefs.get("ema_fast", 5),
+                ema_slow=prefs.get("ema_slow", 8),
+            )
+            self._strategy_key = key
+        else:
+            self.strategy.symbol = sym
+            self.strategy.sec_id = sym
+            self.strategy.interval = tf
+            self.strategy.use_volume_filter = prefs.get("use_vol_filter", False)
+            self.strategy.use_atr_filter = prefs.get("use_atr_filter", True)
+            self.strategy.ema_short_period = prefs.get("ema_fast", 5)
+            self.strategy.ema_long_period = prefs.get("ema_slow", 8)
 
     def run_pipeline_tick(self, is_manual=False, scheduled_close=None):
-        prefs = self.load_prefs()
+        prefs = load_prefs()
         tick_type = "manual" if is_manual else "scheduled"
         
         execution_mode = "MetaTrader5"
@@ -108,22 +123,7 @@ class TradingEngine:
             self.storage.log_event("market", f"Live LTP: ${ltp:,.2f}")
         
         # 2. Strategy
-        if not self.strategy:
-            self.strategy = RealTimeSignalGenerator(
-                stock_symbol=sym,
-                sec_id=sym,
-                interval=tf,
-                use_vol_filter=prefs.get("use_vol_filter", False),
-                use_atr_filter=prefs.get("use_atr_filter", True),
-                ema_fast=prefs.get("ema_fast", 5),
-                ema_slow=prefs.get("ema_slow", 8)
-            )
-        else:
-            self.strategy.use_volume_filter = prefs.get("use_vol_filter", False)
-            self.strategy.use_atr_filter = prefs.get("use_atr_filter", True)
-            self.strategy.ema_short_period = prefs.get("ema_fast", 5)
-            self.strategy.ema_long_period = prefs.get("ema_slow", 8)
-            
+        self._sync_strategy(prefs, sym, tf)
         self.strategy.update_data(df)
         result = self.strategy.run_analysis(
             scheduled_close=scheduled_close,
@@ -168,6 +168,7 @@ class TradingEngine:
         _trade_blocked = False
         _block_reason = ""
         _failure_code = ""
+        _failure_alert_sent = False
         _risk_warnings: list = []
         if sig in ["BUY", "SELL"] and execution_mode == "MetaTrader5":
             strategy_df = result.get("data")
@@ -177,46 +178,53 @@ class TradingEngine:
             close_px = float(signal_row['Close'])
             atr = float(signal_row['ATR']) if 'ATR' in signal_row.index and pd.notna(signal_row['ATR']) else (close_px * 0.005)
 
-            # ── Sync starting balance from SOD snapshot ────────────────────
-            # Use initial_balance from settings as the SOD fallback — never hardcode
-            _init_balance = float(prefs.get("initial_balance", 10_000.0))
-            sod_balance = float(prefs.get("ftmo_sod_balance", _init_balance))
-            self.risk_manager.update_starting_balance(sod_balance)
+            challenge_balance = float(prefs.get("initial_balance", 10_000.0))
+            sod_balance = float(prefs.get("ftmo_sod_balance", challenge_balance))
 
-            # Fetch live account state from MT5
-            current_balance  = sod_balance  # fallback
-            daily_pnl_live   = 0.0
-            leverage_live    = 0
-            mt5_positions    = -1  # -1 = unknown, falls back to internal counter
+            equity_live = sod_balance
+            leverage_live = 0
+            mt5_positions = -1
+            ftmo_metrics = None
             try:
                 acc = mt5.account_info()
                 if acc:
-                    current_balance = acc.equity
-                    daily_pnl_live  = acc.profit
-                    leverage_live   = acc.leverage
-                    # Auto-initialize SOD balance from live MT5 balance if not set
-                    if "ftmo_sod_balance" not in prefs:
-                        prefs["ftmo_sod_balance"] = float(acc.balance)
-                        try:
-                            Path("config/user_prefs.json").write_text(json.dumps(prefs, indent=2), encoding="utf-8")
-                            self.storage.log_event("info", f"Auto-initialized SOD Balance from MT5: ${acc.balance:,.2f}")
-                        except Exception as _pe:
-                            logger.error(f"Failed to auto-save SOD balance: {_pe}")
+                    equity_live = float(acc.equity)
+                    leverage_live = int(acc.leverage)
+                    if prefs.get("ftmo_sod_balance") is None:
                         sod_balance = float(acc.balance)
-                        self.risk_manager.update_starting_balance(sod_balance)
-                # Live open position count — handles restarts & MT5-side closes
+                        prefs["ftmo_sod_balance"] = sod_balance
+                        try:
+                            save_prefs(prefs)
+                            self.storage.log_event(
+                                "info",
+                                f"Auto-initialized SOD balance from MT5: ${sod_balance:,.2f}",
+                            )
+                        except Exception as _pe:
+                            logger.error("Failed to auto-save SOD balance: %s", _pe)
+                    ftmo_metrics = snapshot_from_mt5_account(
+                        acc,
+                        sod_balance=sod_balance,
+                        challenge_balance=challenge_balance,
+                        daily_loss_limit_pct=self.risk_manager.daily_loss_limit_pct,
+                        max_drawdown_pct=self.risk_manager.max_drawdown_pct,
+                    )
                 mt5_positions = mt5.positions_total()
             except Exception as _e:
-                logger.warning(f"Could not fetch MT5 account_info: {_e}")
+                logger.warning("Could not fetch MT5 account_info: %s", _e)
 
-            # PART 1: FTMO Risk Check (includes news blackout for leverage > 1:30)
-            risk_eval = self.risk_manager.evaluate_ftmo_rules(
-                current_balance=current_balance,
-                daily_pnl=daily_pnl_live,
+            self.risk_manager.configure_ftmo(
+                challenge_balance=challenge_balance,
                 sod_balance=sod_balance,
+            )
+
+            risk_eval = self.risk_manager.evaluate_ftmo_rules(
+                equity=equity_live,
+                sod_balance=sod_balance,
+                challenge_balance=challenge_balance,
                 leverage=leverage_live,
                 symbol=sym,
                 open_positions=mt5_positions,
+                metrics=ftmo_metrics,
             )
 
             # Log all warnings and smart suggestions
@@ -239,6 +247,7 @@ class TradingEngine:
                             warnings=risk_eval.warnings,
                             suggestions=risk_eval.suggestions,
                         )
+                        _failure_alert_sent = True
                     else:
                         broadcast_risk_alert(
                             alert_type="FTMO_WARNING",
@@ -279,6 +288,7 @@ class TradingEngine:
                             prefs=prefs,
                             signal=sig,
                         )
+                        _failure_alert_sent = True
                     except Exception as _ne:
                         logger.warning(f"Notifier failed on symbol_info error: {_ne}")
                 else:
@@ -302,6 +312,7 @@ class TradingEngine:
                                 prefs=prefs,
                                 signal=sig,
                             )
+                            _failure_alert_sent = True
                         except Exception as _ne:
                             logger.warning(f"Notifier failed on account_info error: {_ne}")
                     else:
@@ -319,6 +330,10 @@ class TradingEngine:
                         # --- Extract Strategy Metrics & Live Spread ---
                         tick = mt5.symbol_info_tick(sym)
                         live_spread = (tick.ask - tick.bid) if tick else 0.0
+                        if tick:
+                            entry_px = float(tick.ask if sig == "BUY" else tick.bid)
+                        else:
+                            entry_px = close_px
 
                         last_high = result.get('last_high', np.nan) if result else np.nan
                         last_low  = result.get('last_low', np.nan) if result else np.nan
@@ -339,6 +354,7 @@ class TradingEngine:
                                     prefs=prefs,
                                     signal=sig,
                                 )
+                                _failure_alert_sent = True
                             except Exception as _ne:
                                 logger.warning(f"Notifier failed on ATR error: {_ne}")
                         else:
@@ -346,7 +362,7 @@ class TradingEngine:
                             build_result = self.risk_manager.build_order(
                                 signal=sig,
                                 symbol=sym,
-                                close_price=close_px,
+                                close_price=entry_px,
                                 atr=atr_val,
                                 atr_percentile=atr_pct,
                                 last_high=last_high,
@@ -374,6 +390,7 @@ class TradingEngine:
                                         prefs=prefs,
                                         signal=sig,
                                     )
+                                    _failure_alert_sent = True
                                 except Exception as _ne:
                                     logger.warning(f"Notifier failed on order build error: {_ne}")
                             else:
@@ -381,7 +398,7 @@ class TradingEngine:
                                 self.storage.log_event(
                                     "order",
                                     f"OMS Submit: {sig} {order.qty:.2f}L {sym}"
-                                    f" | Entry~{close_px:.4f}"
+                                    f" | Entry~{entry_px:.4f}"
                                     f" | SL={order.stop_loss:.4f} TP={order.take_profit:.4f}"
                                     f" | R:R=1:{order.rr_ratio}"
                                     f" | ATR={atr_val:.4f} | Leverage=1:{leverage}"
@@ -402,6 +419,7 @@ class TradingEngine:
                                             prefs=prefs,
                                             signal=sig,
                                         )
+                                        _failure_alert_sent = True
                                     except Exception as _ne:
                                         logger.warning(f"Notifier failed on OMS duplicate: {_ne}")
                                 else:
@@ -435,6 +453,7 @@ class TradingEngine:
                                                 signal=sig,
                                                 order_id=order_id,
                                             )
+                                            _failure_alert_sent = True
                                         except Exception as _ne:
                                             logger.warning(f"Notifier failed on execution error: {_ne}")
 
@@ -494,6 +513,7 @@ class TradingEngine:
             "trade_blocked": _trade_blocked if sig in ("BUY", "SELL") else False,
             "block_reason": _block_reason,
             "failure_code": _failure_code if sig in ("BUY", "SELL") else "",
+            "failure_alert_sent": _failure_alert_sent if sig in ("BUY", "SELL") else False,
             "risk_warnings": _risk_warnings,
             "signal_bar_open": result.get("signal_bar_open"),
             "scheduled_close": result.get("scheduled_close"),

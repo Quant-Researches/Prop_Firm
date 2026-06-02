@@ -46,6 +46,12 @@ from core.ftmo_time import (
     schedule_matches_now,      # kept for --check-schedule CLI
 )
 from core.candle_timer import compute_next_candle_close, session_info
+from core.ftmo_account import (
+    DEFAULT_RESET_STATE,
+    mark_daily_reset_done,
+    persist_sod_balance,
+    should_run_daily_reset,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,7 +61,7 @@ logger = logging.getLogger("Daemon")
 
 SCHEDULES_PATH   = ROOT / "schedules.json"
 LAST_FIRED_PATH  = ROOT / "data" / "last_fired.json"
-DAILY_RESET_PATH = ROOT / "data" / "daily_reset_date.txt"
+DAILY_RESET_PATH = DEFAULT_RESET_STATE
 
 
 # ── schedules.json helpers (display-only; not used for execution) ─────────────
@@ -119,28 +125,6 @@ def _save_last_fired(fired_key: str, close_dt: datetime) -> None:
         tmp.replace(LAST_FIRED_PATH)   # atomic rename — no partial-write corruption
     except Exception as e:
         logger.warning("Could not persist last_fired: %s", e)
-
-
-# ── Daily reset guard ─────────────────────────────────────────────────────────
-
-def _daily_reset_done_today() -> bool:
-    try:
-        if DAILY_RESET_PATH.exists():
-            return DAILY_RESET_PATH.read_text().strip() == \
-                   datetime.now(ZoneInfo("Europe/Prague")).strftime("%Y-%m-%d")
-    except Exception:
-        pass
-    return False
-
-
-def _mark_daily_reset_done() -> None:
-    try:
-        DAILY_RESET_PATH.parent.mkdir(parents=True, exist_ok=True)
-        DAILY_RESET_PATH.write_text(
-            datetime.now(ZoneInfo("Europe/Prague")).strftime("%Y-%m-%d")
-        )
-    except Exception as e:
-        logger.warning("Could not persist daily_reset_date: %s", e)
 
 
 # ── Chunked sleep ─────────────────────────────────────────────────────────────
@@ -271,9 +255,9 @@ def run_daily_reset(engine: TradingEngine, prefs: dict, prefs_path: Path, reset_
     if not acc_info:
         raise RuntimeError("mt5.account_info() returned None after reconnect")
 
-    prefs["ftmo_sod_balance"] = float(acc_info.balance)
-    prefs_path.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
-    engine.risk_manager.update_starting_balance(float(acc_info.balance))
+    sod = float(acc_info.balance)
+    prefs = persist_sod_balance(prefs_path, sod)
+    engine.risk_manager.configure_ftmo(sod_balance=sod)
 
     now_prg = datetime.now(ZoneInfo("Europe/Prague"))
     now_hel = datetime.now(ZoneInfo("Europe/Helsinki"))
@@ -296,6 +280,36 @@ def run_daily_reset(engine: TradingEngine, prefs: dict, prefs_path: Path, reset_
         prefs=prefs,
         block_reason="Daily reset OK",
     )
+
+
+def _try_daily_reset(
+    engine: TradingEngine,
+    prefs: dict,
+    prefs_path: Path,
+) -> dict:
+    """Run Prague-day SOD snapshot if due (safe after long sleeps)."""
+    reset_time = prefs.get("daily_reset_time", "00:00")
+    if not should_run_daily_reset(reset_time, DAILY_RESET_PATH):
+        return prefs
+    try:
+        run_daily_reset(engine, prefs, prefs_path, reset_time)
+        mark_daily_reset_done(DAILY_RESET_PATH)
+        return load_prefs()
+    except Exception as exc:
+        engine.storage.log_event("error", f"Daily reset failed: {exc}")
+        logger.exception("Daily reset failed")
+        try:
+            from core.notifier import broadcast_order_failure
+            from core.order_failures import DAILY_RESET_FAILED
+            broadcast_order_failure(
+                failure_code=DAILY_RESET_FAILED,
+                symbol=prefs.get("trading_symbol", "UNKNOWN"),
+                detail=f"Daily reset / MT5 reconnect failed: {exc}",
+                prefs=prefs,
+            )
+        except Exception:
+            pass
+    return prefs
 
 
 # ── Main loop — SLEEP-TO-NEXT-CLOSE ──────────────────────────────────────────
@@ -353,27 +367,10 @@ def main_loop() -> None:
         tf     = prefs.get("timeframe",      "1h")
         now    = now_ftmo()
 
-        # 2. Daily reset (Prague midnight, once per calendar day, disk-guarded)
-        reset_time  = prefs.get("daily_reset_time", "00:00")
-        now_prg_str = datetime.now(ZoneInfo("Europe/Prague")).strftime("%H:%M")
-        if now_prg_str == reset_time and not _daily_reset_done_today():
-            try:
-                run_daily_reset(engine, prefs, prefs_path, reset_time)
-                _mark_daily_reset_done()
-            except Exception as exc:
-                engine.storage.log_event("error", f"Daily reset failed: {exc}")
-                logger.exception("Daily reset failed")
-                try:
-                    from core.notifier import broadcast_order_failure
-                    from core.order_failures import DAILY_RESET_FAILED
-                    broadcast_order_failure(
-                        failure_code=DAILY_RESET_FAILED,
-                        symbol=symbol,
-                        detail=f"Daily reset / MT5 reconnect failed: {exc}",
-                        prefs=prefs,
-                    )
-                except Exception:
-                    pass
+        # 2. Daily reset (Prague calendar day — runs on first wake after reset time)
+        prefs = _try_daily_reset(engine, prefs, prefs_path)
+        symbol = prefs.get("trading_symbol", "XAUUSD")
+        tf = prefs.get("timeframe", "1h")
 
         # 3. Compute exact seconds to next candle close
         try:
@@ -398,9 +395,10 @@ def main_loop() -> None:
         # 4. Precise sleep — chunked every 5 min to detect settings changes
         _chunked_sleep(sleep_sec, chunk_sec=300)
 
-        # 5. Post-sleep sanity checks
-        wake_now = now_ftmo()
+        # 5. Post-sleep: daily reset may have been missed during sleep
+        prefs = _try_daily_reset(engine, prefs, prefs_path)
 
+        wake_now = now_ftmo()
         if wake_now.weekday() >= 5:          # Saturday=5, Sunday=6
             logger.info(
                 "Weekend (%s) — no pipeline tick. Sleeping to Monday.",
@@ -408,7 +406,6 @@ def main_loop() -> None:
             )
             continue
 
-        # Reload prefs (settings may have changed during long sleep)
         prefs  = load_prefs()
         symbol = prefs.get("trading_symbol", "XAUUSD")
         tf     = prefs.get("timeframe", "1h")

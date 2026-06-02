@@ -1,5 +1,6 @@
 import MetaTrader5 as mt5
 import pandas as pd
+from core.ftmo_time import FTMO_TZ
 from core.mt5_connection import MT5Connection
 
 def fetch_mt5_candles(symbol, timeframe_str, bar_count=500, mt5_path="", account="", password="", server=""):
@@ -31,8 +32,9 @@ def fetch_mt5_candles(symbol, timeframe_str, bar_count=500, mt5_path="", account
         return None, "MT5", f"No data for {symbol}"
         
     df = pd.DataFrame(rates)
-    df['time'] = pd.to_datetime(df['time'], unit='s')
-    df.set_index('time', inplace=True)
+    # MT5 epoch seconds → UTC instant → FTMO chart timezone (Europe/Helsinki)
+    df["time"] = pd.to_datetime(df["time"], unit="s", utc=True).dt.tz_convert(FTMO_TZ)
+    df.set_index("time", inplace=True)
     df.rename(columns={'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close', 'tick_volume': 'Volume'}, inplace=True)
     return df, "MT5", ""
 

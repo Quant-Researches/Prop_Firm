@@ -12,6 +12,7 @@ import logging
 import requests
 import pytz
 from core.strategy import SignalEvent
+from core.ftmo_account import FtmoMetrics, compute_ftmo_metrics
 from core.order_failures import (
     OrderBuildResult,
     ORDER_INVALID_SIGNAL,
@@ -176,34 +177,48 @@ class RiskManager:
         self.rr_ratio = rr_ratio
         self.max_positions = max_positions
         self._open_positions: int = 0
+        self.challenge_balance = starting_balance
+        self.sod_balance = starting_balance
 
     # -------------------------------------------------------------------------
     # PART 1: FTMO Risk Guardian
     # -------------------------------------------------------------------------
 
+    def configure_ftmo(
+        self,
+        *,
+        challenge_balance: Optional[float] = None,
+        sod_balance: Optional[float] = None,
+    ) -> None:
+        """Set challenge (max-DD base) and SOD (daily-loss base) balances."""
+        if challenge_balance is not None:
+            self.challenge_balance = float(challenge_balance)
+            self.starting_balance = self.challenge_balance  # legacy alias
+        if sod_balance is not None:
+            self.sod_balance = float(sod_balance)
+
     def evaluate_ftmo_rules(
         self,
-        current_balance: float,
-        daily_pnl: float,
-        sod_balance: Optional[float] = None,
+        equity: float,
+        sod_balance: float,
+        challenge_balance: float,
         leverage: int = 0,
         symbol: str = "",
         open_positions: int = -1,
+        metrics: Optional[FtmoMetrics] = None,
     ) -> RiskEvaluation:
         """
         Evaluates ALL FTMO rules before a trade is placed.
 
-        current_balance : live equity (mt5.account_info().equity)
-        daily_pnl       : today P&L (mt5.account_info().profit)
-        sod_balance     : start-of-day balance snapshot
-        leverage        : mt5.account_info().leverage (e.g. 100 = 1:100)
-        symbol          : MT5 symbol being traded (e.g. XAUUSD)
-        open_positions  : live position count from mt5.positions_total().
-                          Pass -1 to fall back to the internal counter
-                          (not recommended for live trading).
+        equity            : live equity (mt5.account_info().equity)
+        sod_balance       : Prague-day start balance (ftmo_sod_balance pref)
+        challenge_balance : challenge initial balance (initial_balance pref)
+        leverage          : mt5.account_info().leverage (e.g. 100 = 1:100)
+        symbol            : MT5 symbol being traded (e.g. XAUUSD)
+        open_positions    : live position count from mt5.positions_total().
 
-        Check 6 (news blackout) only activates when leverage > 30.
-        All times in UTC internally; display in FTMO time (Europe/Prague).
+        Daily loss  = max(0, sod - equity).  Max DD = max(0, challenge - equity).
+        See core/ftmo_account.py.
         """
         warnings = []
         suggestions = []
@@ -211,19 +226,30 @@ class RiskManager:
         block_reason = ""
         block_code = ""
 
-        daily_loss_limit = self.starting_balance * self.daily_loss_limit_pct
-        max_dd_limit     = self.starting_balance * self.max_drawdown_pct
+        self.configure_ftmo(
+            challenge_balance=challenge_balance,
+            sod_balance=sod_balance,
+        )
+        m = metrics or compute_ftmo_metrics(
+            equity=equity,
+            sod_balance=sod_balance,
+            challenge_balance=challenge_balance,
+            daily_loss_limit_pct=self.daily_loss_limit_pct,
+            max_drawdown_pct=self.max_drawdown_pct,
+        )
 
-        daily_loss_amount   = max(0.0, -daily_pnl)
-        total_drawdown      = max(0.0, self.starting_balance - current_balance)
-        daily_loss_pct_used = (daily_loss_amount / self.starting_balance) * 100
-        total_drawdown_pct  = (total_drawdown / self.starting_balance) * 100
-        daily_remaining     = max(0.0, daily_loss_limit - daily_loss_amount)
-        dd_remaining        = max(0.0, max_dd_limit - total_drawdown)
+        daily_loss_amount   = m.daily_loss
+        total_drawdown      = m.max_drawdown
+        daily_loss_limit    = m.daily_loss_limit
+        max_dd_limit        = m.max_drawdown_limit
+        daily_loss_pct_used = m.daily_loss_pct
+        total_drawdown_pct  = m.max_drawdown_pct
+        daily_remaining     = m.daily_remaining
+        dd_remaining        = m.dd_remaining
 
         lim_pct = self.daily_loss_limit_pct * 100
         dd_pct  = self.max_drawdown_pct * 100
-        bal     = self.starting_balance
+        bal     = challenge_balance
 
         # Check 1: Daily Loss Limit (5%)
         if daily_loss_amount >= daily_loss_limit:
@@ -598,7 +624,9 @@ class RiskManager:
         self._open_positions = max(0, self._open_positions - 1)
 
     def update_starting_balance(self, balance: float) -> None:
-        self.starting_balance = balance
+        """Update SOD snapshot (called after daily reset)."""
+        self.sod_balance = float(balance)
+        self.starting_balance = self.sod_balance
 
     @property
     def open_positions(self) -> int:

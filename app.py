@@ -109,8 +109,13 @@ def _load_live_state():
     if mt5_ok:
         acc = mt5.account_info()
         if acc:
+            from core.ftmo_account import compute_ftmo_metrics
+            _challenge = float(prefs.get("initial_balance", 10_000.0))
+            _sod = float(prefs.get("ftmo_sod_balance", _challenge))
+            _m = compute_ftmo_metrics(acc.equity, _sod, _challenge, floating_pnl=acc.profit)
             st.session_state.account_balance = acc.equity
-            st.session_state.daily_pnl       = acc.profit
+            st.session_state.daily_pnl       = _m.daily_pnl
+            st.session_state.sod_balance     = _sod
             st.session_state.open_positions  = mt5.positions_total() or 0
             st.session_state._mt5_server     = acc.server
             st.session_state._mt5_login      = acc.login
@@ -438,7 +443,9 @@ with cfg_col:
     _pnl  = st.session_state.daily_pnl
     _init = float(_prefs.get("initial_balance", 10_000.0))
     _sod  = st.session_state.get("sod_balance", float(_prefs.get("ftmo_sod_balance", _init)))
-    _dd   = ((_sod - _eq) / _sod * 100) if _sod > 0 else 0.0
+    from core.ftmo_account import compute_ftmo_metrics
+    _fm = compute_ftmo_metrics(_eq, _sod, _init)
+    _dd   = _fm.daily_loss_pct
     _dd_color = "#ef4444" if _dd > 3 else "#fbbf24" if _dd > 1 else "#10b981"
 
     _reset = _prefs.get("daily_reset_time", "00:00")

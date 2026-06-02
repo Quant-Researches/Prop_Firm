@@ -535,6 +535,14 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
     block_reason = result.get("block_reason", "")
     failure_code = result.get("failure_code", "")
 
+    # Specific failure/risk alert already sent from engine — avoid duplicate Telegram
+    if trade_blocked and result.get("failure_alert_sent"):
+        logger.info(
+            "Skipping LTS broadcast — categorized failure alert already sent (%s).",
+            failure_code or "blocked",
+        )
+        return
+
     # Skip HOLD-only pings when user disabled them (signals/blocks/fills always notify)
     notify_on_hold = prefs.get("notify_on_hold", True)
     is_scheduled = trigger in ("LTS_AUTOMATIC", "SCHEDULER")
