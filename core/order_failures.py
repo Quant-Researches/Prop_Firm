@@ -150,7 +150,7 @@ FAILURE_META: dict[str, FailureMeta] = {
     ORDER_SL_TOO_WIDE: FailureMeta(
         "ORDER BLOCKED — STOP LOSS TOO WIDE",
         "Order Builder",
-        ("Structure + ATR produced SL > 5% of price. Wait for tighter structure or lower volatility.",),
+        ("ATR-based SL exceeds 5% of price. Wait for lower volatility or adjust ATR regime settings.",),
     ),
     ORDER_INVALID_TICK_DATA: FailureMeta(
         "ORDER BLOCKED — INVALID TICK DATA",

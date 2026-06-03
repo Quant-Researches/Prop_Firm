@@ -335,8 +335,6 @@ class TradingEngine:
                         else:
                             entry_px = close_px
 
-                        last_high = result.get('last_high', np.nan) if result else np.nan
-                        last_low  = result.get('last_low', np.nan) if result else np.nan
                         atr_val   = result.get('atr', close_px * 0.005) if result else (close_px * 0.005)
                         atr_pct   = result.get('atr_percentile', 0.5) if result else 0.5
 
@@ -365,8 +363,6 @@ class TradingEngine:
                                 close_price=entry_px,
                                 atr=atr_val,
                                 atr_percentile=atr_pct,
-                                last_high=last_high,
-                                last_low=last_low,
                                 live_spread=live_spread,
                                 tick_size=tick_size,
                                 tick_value=tick_value,

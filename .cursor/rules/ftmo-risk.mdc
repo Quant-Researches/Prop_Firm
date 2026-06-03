@@ -20,7 +20,7 @@ alwaysApply: false
 - `build_order()` returning `None` → **block trade**, log + alert — no fallback defaults
 - Spread filter: block if spread > 10% of ATR
 - Fixed dollar risk via tick_size / tick_value from MT5 — never guess
-- Structure-aware SL: `MAX(ATR distance, structure distance)`
+- SL distance: ATR × regime multiplier only (ATR percentile → 1.2 / 1.5 / 1.8)
 - Duplicate prevention: `oms.has_open_position()` before submit
 
 ## Execution

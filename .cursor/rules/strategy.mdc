@@ -34,7 +34,7 @@ alwaysApply: false
 ## Integration with pipeline
 
 - Strategy output keys: `Signal`, `Market_Phase`, `Action`, `last_high`, `last_low`, `atr`, `atr_percentile`, `data`
-- `engine.py` passes `last_high`/`last_low`/`atr` to `risk_manager.build_order()` — keep these fields stable
+- `engine.py` passes `atr` / `atr_percentile` to `risk_manager.build_order()` — keep these fields stable
 - Reuse `Utilities/technical_indicators.py` — do not duplicate EMA/ATR math inline
 
 ## Testing

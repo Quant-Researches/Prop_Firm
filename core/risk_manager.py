@@ -157,7 +157,7 @@ class RiskManager:
         pre-trade budget, and news blackout (leverage > 1:30).
 
     Part 2 - build_order():
-        ADR-based SL (15% of daily range), 1:2 R:R,
+        ATR-percentile SL (regime multiplier), 1:2 R:R,
         leverage/margin-validated lot sizing.
     """
 
@@ -490,8 +490,6 @@ class RiskManager:
         close_price: float,
         atr: float,
         atr_percentile: float,
-        last_high: float,
-        last_low: float,
         live_spread: float,
         tick_size: float,
         tick_value: float,
@@ -524,20 +522,11 @@ class RiskManager:
             logger.warning(f"TRADE BLOCKED: {msg}")
             return OrderBuildResult(failure_code=ORDER_SPREAD_TOO_HIGH, message=msg)
 
-        # --- Volatility Regime Logic ---
+        # --- Volatility Regime Logic (ATR percentile → multiplier → SL distance) ---
         atr_multiplier = self._classify_volatility(atr_percentile)
-        atr_stop_distance = atr * atr_multiplier
+        final_sl_distance = atr * atr_multiplier
 
-        # --- Structure-Aware SL Validator ---
-        structure_stop_distance = 0.0
-        if signal == "BUY" and last_low and last_low > 0:
-            structure_stop_distance = max(0.0, close_price - last_low)
-        elif signal == "SELL" and last_high and last_high > 0:
-            structure_stop_distance = max(0.0, last_high - close_price)
-
-        final_sl_distance = max(atr_stop_distance, structure_stop_distance)
-
-        # 2. Minimum/Maximum SL Bounds
+        # Minimum/Maximum SL Bounds
         min_sl = tick_size * 5
         max_sl = close_price * 0.05  # Sanity check: don't allow a 5% stop loss
         if final_sl_distance < min_sl:
@@ -546,7 +535,7 @@ class RiskManager:
         if final_sl_distance > max_sl:
             msg = (
                 f"SL distance ({final_sl_distance:.5f}) exceeds maximum ({max_sl:.5f}, 5% of price). "
-                f"ATR×{atr_multiplier}={atr_stop_distance:.5f}, structure={structure_stop_distance:.5f}"
+                f"ATR×{atr_multiplier}={final_sl_distance:.5f}"
             )
             logger.warning(f"TRADE BLOCKED: {msg}")
             return OrderBuildResult(failure_code=ORDER_SL_TOO_WIDE, message=msg)
