@@ -27,7 +27,7 @@ from core.order_failures import (
     OMS_DUPLICATE_POSITION,
     classify_mt5_execution_error,
 )
-from core.notifier import broadcast_order_failure, broadcast_risk_alert
+from core.notifier import broadcast_order_failure, broadcast_risk_alert, tick_context_from_pipeline
 
 
 class TradingEngine:
@@ -137,6 +137,10 @@ class TradingEngine:
         sig = result.get("Signal", "HOLD")
         phase = result.get("Market_Phase", "SIDEWAYS")
         action = result.get('Action', '')
+        _tick_ctx = tick_context_from_pipeline(
+            {**result, "signal": sig, "action": action, "candles_fetched": len(df)},
+            tf,
+        )
         bar_sel = result.get("bar_selection", "")
         if bar_sel:
             self.storage.log_event(
@@ -246,6 +250,7 @@ class TradingEngine:
                             signal=sig,
                             warnings=risk_eval.warnings,
                             suggestions=risk_eval.suggestions,
+                            tick_context=_tick_ctx,
                         )
                         _failure_alert_sent = True
                     else:
@@ -257,6 +262,7 @@ class TradingEngine:
                             prefs=prefs,
                             failure_code=FTMO_WARNING,
                             signal=sig,
+                            tick_context=_tick_ctx,
                         )
                 except Exception as _ne:
                     logger.warning(f"Risk alert broadcast failed: {_ne}")
@@ -287,6 +293,7 @@ class TradingEngine:
                             detail=_sym_err,
                             prefs=prefs,
                             signal=sig,
+                            tick_context=_tick_ctx,
                         )
                         _failure_alert_sent = True
                     except Exception as _ne:
@@ -311,6 +318,7 @@ class TradingEngine:
                                 detail=_acc_err,
                                 prefs=prefs,
                                 signal=sig,
+                                tick_context=_tick_ctx,
                             )
                             _failure_alert_sent = True
                         except Exception as _ne:
@@ -351,6 +359,7 @@ class TradingEngine:
                                     detail=_atr_err,
                                     prefs=prefs,
                                     signal=sig,
+                                    tick_context=_tick_ctx,
                                 )
                                 _failure_alert_sent = True
                             except Exception as _ne:
@@ -385,6 +394,7 @@ class TradingEngine:
                                         detail=_order_err,
                                         prefs=prefs,
                                         signal=sig,
+                                        tick_context=_tick_ctx,
                                     )
                                     _failure_alert_sent = True
                                 except Exception as _ne:
@@ -414,6 +424,7 @@ class TradingEngine:
                                             detail=_dup,
                                             prefs=prefs,
                                             signal=sig,
+                                            tick_context=_tick_ctx,
                                         )
                                         _failure_alert_sent = True
                                     except Exception as _ne:
@@ -448,6 +459,7 @@ class TradingEngine:
                                                 prefs=prefs,
                                                 signal=sig,
                                                 order_id=order_id,
+                                                tick_context=_tick_ctx,
                                             )
                                             _failure_alert_sent = True
                                         except Exception as _ne:
@@ -514,4 +526,7 @@ class TradingEngine:
             "signal_bar_open": result.get("signal_bar_open"),
             "scheduled_close": result.get("scheduled_close"),
             "bar_selection": result.get("bar_selection"),
+            "signal_bar_index": result.get("signal_bar_index"),
+            "raw_signal": result.get("raw_signal"),
+            "price": result.get("price"),
         }

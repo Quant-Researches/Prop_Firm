@@ -6,7 +6,12 @@ import smtplib
 from email.message import EmailMessage
 import winsound
 import threading
+from typing import Any
 
+import pandas as pd
+
+from core.candle_timer import TF_MINUTES
+from core.ftmo_time import FTMO_TZ
 from core.order_failures import (
     FAILURE_META,
     FTMO_WARNING,
@@ -25,6 +30,115 @@ def _run_threads(threads: list) -> None:
     for t in threads:
         t.daemon = True
         t.start()
+
+
+def _fmt_ftmo_ts(ts: Any) -> str:
+    """Format bar / schedule timestamps for alerts (Europe/Helsinki)."""
+    if ts is None:
+        return "—"
+    try:
+        t = pd.Timestamp(ts)
+        if t.tzinfo is None:
+            t = t.tz_localize(FTMO_TZ)
+        else:
+            t = t.tz_convert(FTMO_TZ)
+        return t.strftime("%a %d %b %Y %H:%M") + " FTMO"
+    except Exception:
+        return str(ts)
+
+
+def tick_context_from_pipeline(result: dict | None, timeframe: str = "5m") -> dict | None:
+    """
+    Build bar-selection + signal transparency fields from engine/strategy result.
+    """
+    if not result:
+        return None
+    idx = result.get("signal_bar_index")
+    open_ts = result.get("signal_bar_open")
+    if idx is None and open_ts is None and not result.get("bar_selection"):
+        return None
+
+    step = TF_MINUTES.get(timeframe, 60)
+    close_ts = None
+    if open_ts is not None:
+        try:
+            t = pd.Timestamp(open_ts)
+            if t.tzinfo is None:
+                t = t.tz_localize(FTMO_TZ)
+            else:
+                t = t.tz_convert(FTMO_TZ)
+            close_ts = t + pd.Timedelta(minutes=step)
+        except Exception:
+            close_ts = None
+
+    price = result.get("price")
+    if price is None and "time" in result:
+        price = result.get("price")
+
+    return {
+        "timeframe": timeframe,
+        "signal_bar_index": idx,
+        "signal_bar_open": _fmt_ftmo_ts(open_ts),
+        "signal_bar_close": _fmt_ftmo_ts(close_ts),
+        "scheduled_close": _fmt_ftmo_ts(result.get("scheduled_close")),
+        "bar_selection": result.get("bar_selection") or "—",
+        "trade_signal": result.get("Signal") or result.get("signal") or "—",
+        "raw_signal": result.get("raw_signal") or "—",
+        "action": result.get("Action") or result.get("action") or "",
+        "bar_close_price": price,
+        "candles_fetched": result.get("candles_fetched"),
+    }
+
+
+def _append_bar_context_telegram(msg: str, ctx: dict | None, escape_md) -> str:
+    if not ctx:
+        return msg
+    msg += "\n*Bar evaluated*\n"
+    if ctx.get("signal_bar_index") is not None:
+        msg += "*DF index:* " + escape_md(str(ctx["signal_bar_index"])) + "\n"
+    msg += "*Bar open:* " + escape_md(str(ctx.get("signal_bar_open", "—"))) + "\n"
+    msg += "*Bar close:* " + escape_md(str(ctx.get("signal_bar_close", "—"))) + "\n"
+    if ctx.get("scheduled_close") and ctx["scheduled_close"] != "—":
+        msg += "*Scheduled close:* " + escape_md(str(ctx["scheduled_close"])) + "\n"
+    msg += "*Picker:* " + escape_md(str(ctx.get("bar_selection", "—"))) + "\n"
+    msg += "*Trade signal:* " + escape_md(str(ctx.get("trade_signal", "—"))) + "\n"
+    raw = ctx.get("raw_signal", "—")
+    if raw and raw != "—":
+        msg += "*Raw signal:* " + escape_md(str(raw)) + "\n"
+    if ctx.get("action"):
+        msg += "*Reason:* " + escape_md(str(ctx["action"])) + "\n"
+    px = ctx.get("bar_close_price")
+    if px is not None and not (isinstance(px, float) and pd.isna(px)):
+        try:
+            msg += "*Bar close price:* $" + escape_md(f"{float(px):,.4f}") + "\n"
+        except (TypeError, ValueError):
+            pass
+    return msg
+
+
+def _append_bar_context_plain(lines: list[str], ctx: dict | None) -> None:
+    if not ctx:
+        return
+    lines.append("--- Bar evaluated ---")
+    if ctx.get("signal_bar_index") is not None:
+        lines.append(f"DF index: {ctx['signal_bar_index']}")
+    lines.append(f"Bar open: {ctx.get('signal_bar_open', '—')}")
+    lines.append(f"Bar close: {ctx.get('signal_bar_close', '—')}")
+    if ctx.get("scheduled_close") and ctx["scheduled_close"] != "—":
+        lines.append(f"Scheduled close: {ctx['scheduled_close']}")
+    lines.append(f"Picker: {ctx.get('bar_selection', '—')}")
+    lines.append(f"Trade signal: {ctx.get('trade_signal', '—')}")
+    if ctx.get("raw_signal") and ctx["raw_signal"] != "—":
+        lines.append(f"Raw signal: {ctx['raw_signal']}")
+    if ctx.get("action"):
+        lines.append(f"Reason: {ctx['action']}")
+    px = ctx.get("bar_close_price")
+    if px is not None:
+        try:
+            if not pd.isna(px):
+                lines.append(f"Bar close price: ${float(px):,.4f}")
+        except (TypeError, ValueError):
+            pass
 
 def send_windows_notification(title: str, message: str):
     """
@@ -136,7 +250,12 @@ def _format_telegram_message(payload: dict, prefs: dict) -> str:
     msg += "*Signal:* " + escape_md(signal_icon) + "\n"
     msg += "*LTP:* $" + escape_md(f"{ltp:,.4f}") + "\n"
     msg += "*EMA Cross:* " + escape_md(str(ema_fast)) + " / " + escape_md(str(ema_slow)) + "\n"
-    msg += "*Phase:* " + escape_md(phase) + "\n\n"
+    msg += "*Phase:* " + escape_md(phase) + "\n"
+    msg = _append_bar_context_telegram(msg, payload.get("tick_context"), escape_md)
+    msg += "\n"
+
+    if payload.get("candles_fetched"):
+        msg += "*Candles fetched:* " + escape_md(str(payload["candles_fetched"])) + "\n\n"
     
     if "order" in payload and payload["order"]:
         order = payload["order"]
@@ -158,7 +277,13 @@ def _format_telegram_message(payload: dict, prefs: dict) -> str:
         exc = payload["execution"]
         price = exc.get('fill_price', exc.get('filled_price', 0))
         msg += "*Execution*\n"
-        msg += "Fill Price: $" + escape_md(f"{price:,.4f}") + "\n\n"
+        if price and float(price) > 0:
+            msg += "Fill Price: $" + escape_md(f"{float(price):,.4f}") + "\n"
+        else:
+            msg += "Fill Price: _pending — verify in MT5 deal history_\n"
+        if exc.get("order_id"):
+            msg += "*Order ID:* " + escape_md(str(exc["order_id"])) + "\n"
+        msg += "\n"
         
     if payload.get("error"):
         err = payload.get("error")
@@ -170,9 +295,12 @@ def _format_telegram_message(payload: dict, prefs: dict) -> str:
             m = meta_for(fc)
             msg += f"\n🚫 *{escape_md(m.heading)}*\n"
             msg += "*Category:* " + escape_md(m.category) + "\n"
-        msg += "*Reason:* " + escape_md(payload.get("block_reason", "Risk guard")) + "\n"
+        msg += "*Block reason:* " + escape_md(payload.get("block_reason", "Risk guard")) + "\n"
         for w in payload.get("risk_warnings") or []:
             msg += escape_md(w) + "\n"
+        if fc:
+            for s in meta_for(fc).suggestions[:3]:
+                msg += "_Tip:_ " + escape_md(s) + "\n"
 
     if payload.get("fill"):
         msg += "\n✅ *Order filled on MT5*\n"
@@ -264,6 +392,8 @@ def _format_order_failure_telegram(
     warnings: list | None = None,
     suggestions: list | None = None,
     order_id: str = "",
+    tick_context: dict | None = None,
+    timeframe: str = "",
 ) -> str:
     """Telegram body with category-specific heading."""
     m = meta_for(failure_code)
@@ -272,12 +402,15 @@ def _format_order_failure_telegram(
     msg += "*Category:* " + _escape_md(m.category) + "\n"
     if symbol:
         msg += "*Symbol:* " + _escape_md(symbol) + "\n"
+    if timeframe:
+        msg += "*Timeframe:* " + _escape_md(timeframe) + "\n"
     if signal and signal in ("BUY", "SELL"):
         msg += "*Signal:* " + _escape_md(signal) + "\n"
     if order_id:
         msg += "*Order ID:* " + _escape_md(order_id) + "\n"
+    msg = _append_bar_context_telegram(msg, tick_context, _escape_md)
     if detail:
-        msg += "*Reason:* " + _escape_md(detail) + "\n"
+        msg += "\n*Failure detail:* " + _escape_md(detail) + "\n"
     if warnings:
         msg += "\n*Details:*\n"
         for w in warnings:
@@ -295,7 +428,9 @@ def _format_order_failure_telegram(
 
 def _format_risk_telegram_message(alert_type: str, symbol: str, warnings: list,
                                    suggestions: list, block_reason: str = "",
-                                   failure_code: str = "", signal: str = "") -> str:
+                                   failure_code: str = "", signal: str = "",
+                                   tick_context: dict | None = None,
+                                   timeframe: str = "") -> str:
     """
     Formats a risk/news alert into a MarkdownV2 Telegram message.
     When failure_code is set, uses the specific heading from order_failures registry.
@@ -308,6 +443,8 @@ def _format_risk_telegram_message(alert_type: str, symbol: str, warnings: list,
             signal=signal,
             warnings=warnings,
             suggestions=suggestions,
+            tick_context=tick_context,
+            timeframe=timeframe,
         )
 
     icons = {
@@ -323,10 +460,13 @@ def _format_risk_telegram_message(alert_type: str, symbol: str, warnings: list,
     msg += "*" + _escape_md(header) + "*\n\n"
     if symbol:
         msg += "*Symbol:* " + _escape_md(symbol) + "\n"
+    if timeframe:
+        msg += "*Timeframe:* " + _escape_md(timeframe) + "\n"
     if signal and signal in ("BUY", "SELL"):
         msg += "*Signal:* " + _escape_md(signal) + "\n"
+    msg = _append_bar_context_telegram(msg, tick_context, _escape_md)
     if block_reason:
-        msg += "*Reason:* " + _escape_md(block_reason) + "\n"
+        msg += "\n*Reason:* " + _escape_md(block_reason) + "\n"
     if warnings:
         msg += "\n*Details:*\n"
         for w in warnings:
@@ -347,6 +487,7 @@ def broadcast_order_failure(
     warnings: list | None = None,
     suggestions: list | None = None,
     order_id: str = "",
+    tick_context: dict | None = None,
 ) -> None:
     """
     Broadcast a categorized trade/order failure with a specific heading per failure_code.
@@ -358,6 +499,7 @@ def broadcast_order_failure(
     if detail and detail not in merged_warnings:
         merged_warnings.insert(0, detail)
 
+    tf = (tick_context or {}).get("timeframe") or prefs.get("timeframe", "")
     tg_msg = _format_order_failure_telegram(
         failure_code=failure_code,
         symbol=symbol,
@@ -366,13 +508,18 @@ def broadcast_order_failure(
         warnings=merged_warnings,
         suggestions=merged_suggestions,
         order_id=order_id,
+        tick_context=tick_context,
+        timeframe=tf,
     )
     plain_lines = [m.heading, f"Category: {m.category}", f"Symbol: {symbol}"]
+    if tf:
+        plain_lines.append(f"Timeframe: {tf}")
     if signal:
         plain_lines.append(f"Signal: {signal}")
     if order_id:
         plain_lines.append(f"Order ID: {order_id}")
-    plain_lines.append(f"Reason: {detail}")
+    _append_bar_context_plain(plain_lines, tick_context)
+    plain_lines.append(f"Failure detail: {detail}")
     plain_lines.extend(merged_warnings)
     plain_lines.extend(merged_suggestions)
     plain_msg = "\n".join(plain_lines)
@@ -420,6 +567,7 @@ def broadcast_risk_alert(
     block_reason: str = "",
     failure_code: str = "",
     signal: str = "",
+    tick_context: dict | None = None,
 ):
     """
     Broadcasts FTMO risk and news alerts. Prefer failure_code for specific headings.
@@ -434,6 +582,7 @@ def broadcast_risk_alert(
             signal=signal,
             warnings=warnings,
             suggestions=suggestions,
+            tick_context=tick_context,
         )
         return
 
@@ -451,8 +600,12 @@ def broadcast_risk_alert(
     tg_msg = _format_risk_telegram_message(
         alert_type, symbol, warnings, suggestions, block_reason,
         failure_code=fc, signal=signal,
+        tick_context=tick_context,
+        timeframe=(tick_context or {}).get("timeframe") or prefs.get("timeframe", ""),
     )
-    plain_msg = "\n".join(warnings + suggestions)
+    plain_lines = list(warnings) + list(suggestions)
+    _append_bar_context_plain(plain_lines, tick_context)
+    plain_msg = "\n".join(plain_lines)
     if fc:
         title = f"Trade Pulse — {meta_for(fc).heading}"
         play_sound = meta_for(fc).play_sound
@@ -569,6 +722,9 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
         broadcast_lts_signal(json_payload, prefs)
         return
 
+    tf = prefs.get("timeframe", "5m")
+    tick_ctx = tick_context_from_pipeline(result, tf)
+
     # ── Build pure JSON payload ──
     json_payload = {
         "trigger": trigger,
@@ -582,6 +738,9 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
         "failure_code": failure_code,
         "risk_warnings": result.get("risk_warnings", []),
         "fill": bool(fill),
+        "tick_context": tick_ctx,
+        "candles_fetched": result.get("candles_fetched"),
+        "action": result.get("action", ""),
     }
     if order:
         order_event = order
@@ -598,6 +757,7 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
         json_payload["execution"] = {
             "fill_price": round(float(fill_event.fill_price), 4),
             "commission": round(float(fill_event.commission), 2) if hasattr(fill_event, 'commission') else 0,
+            "order_id": getattr(fill_event, "order_id", "") or "",
         }
     # risk_warnings removed — FTMO risk info is now logged in the event log, not the notifier
         
