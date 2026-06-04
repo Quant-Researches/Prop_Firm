@@ -769,6 +769,20 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
             import numpy as np
             from core.chart_utils import generate_static_trade_chart
 
+            chart_entry = None
+            chart_sl = None
+            chart_tp = None
+            if order:
+                chart_sl = getattr(order, "stop_loss", None)
+                chart_tp = getattr(order, "take_profit", None)
+                chart_entry = getattr(order, "limit_price", None)
+            if fill and getattr(fill, "fill_price", 0) and float(fill.fill_price) > 0:
+                chart_entry = float(fill.fill_price)
+            if chart_entry is None:
+                px = result.get("price") or result.get("ltp")
+                if px is not None and not (isinstance(px, float) and np.isnan(px)) and float(px) > 0:
+                    chart_entry = float(px)
+
             chart_bytes = generate_static_trade_chart(
                 df_chart=df_chart,
                 selected_asset_name=sym,
@@ -776,7 +790,11 @@ def process_and_broadcast(result: dict, prefs: dict, trigger: str = "LTS_MANUAL"
                 ema_fast=prefs.get('ema_fast', 3),
                 ema_slow=prefs.get('ema_slow', 8),
                 last_high=result.get('last_high', np.nan),
-                last_low=result.get('last_low', np.nan)
+                last_low=result.get('last_low', np.nan),
+                entry_price=chart_entry,
+                stop_loss=chart_sl,
+                take_profit=chart_tp,
+                signal_side=sig if sig in ("BUY", "SELL") else "",
             )
         except Exception as e:
             logger.warning(f"Static chart generation failed: {e}")

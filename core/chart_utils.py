@@ -11,7 +11,11 @@ def generate_trade_chart(
     ema_slow: int, 
     last_high: float = np.nan, 
     last_low: float = np.nan,
-    dark_mode: bool = False
+    dark_mode: bool = False,
+    entry_price: float | None = None,
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
+    signal_side: str = "",
 ) -> go.Figure:
     """
     Generates a standardized Plotly Candlestick chart used across the UI and automated alerts.
@@ -89,6 +93,28 @@ def generate_trade_chart(
             annotation_text=f"Low {last_low:,.2f}",
             annotation_font_color="#ef4444", annotation_position="right",
             row=1, col=1
+        )
+
+    if entry_price is not None and not (isinstance(entry_price, float) and np.isnan(entry_price)) and entry_price > 0:
+        fig_merge.add_hline(
+            y=float(entry_price), line_dash="solid", line_color="#fbbf24", line_width=1.5,
+            annotation_text=f"Entry {entry_price:,.2f}",
+            annotation_font_color="#fbbf24", annotation_position="right",
+            row=1, col=1,
+        )
+    if stop_loss is not None and not (isinstance(stop_loss, float) and np.isnan(stop_loss)) and stop_loss > 0:
+        fig_merge.add_hline(
+            y=float(stop_loss), line_dash="dash", line_color="#ef4444", line_width=1.5,
+            annotation_text=f"SL {stop_loss:,.2f}",
+            annotation_font_color="#ef4444", annotation_position="left",
+            row=1, col=1,
+        )
+    if take_profit is not None and not (isinstance(take_profit, float) and np.isnan(take_profit)) and take_profit > 0:
+        fig_merge.add_hline(
+            y=float(take_profit), line_dash="dash", line_color="#22c55e", line_width=1.5,
+            annotation_text=f"TP {take_profit:,.2f}",
+            annotation_font_color="#22c55e", annotation_position="left",
+            row=1, col=1,
         )
 
     # ── BUY / SELL SIGNALS ──
@@ -190,6 +216,75 @@ def generate_trade_chart(
     return fig_merge
 
 
+def _resolve_ema_columns(plot_df: pd.DataFrame) -> tuple[str | None, str | None]:
+    """Match EMA columns regardless of naming (EMA_Fast, fast_ema, etc.)."""
+    fast = slow = None
+    for c in plot_df.columns:
+        cl = str(c).lower().replace(" ", "")
+        if cl in ("ema_fast", "fast_ema", "ema_short"):
+            fast = c
+        if cl in ("ema_slow", "slow_ema", "ema_long"):
+            slow = c
+    return fast, slow
+
+
+def _draw_trade_levels(
+    ax,
+    *,
+    entry: float | None = None,
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
+    side: str = "",
+) -> None:
+    """Overlay entry / SL / TP on mplfinance price axis with right-side labels."""
+    levels: list[tuple[float, str, str, str]] = []
+    if entry is not None and not (isinstance(entry, float) and np.isnan(entry)) and entry > 0:
+        levels.append((float(entry), "#fbbf24", "-", f"Entry {entry:,.2f}"))
+    if stop_loss is not None and not (isinstance(stop_loss, float) and np.isnan(stop_loss)) and stop_loss > 0:
+        levels.append((float(stop_loss), "#ef4444", "--", f"SL {stop_loss:,.2f}"))
+    if take_profit is not None and not (isinstance(take_profit, float) and np.isnan(take_profit)) and take_profit > 0:
+        levels.append((float(take_profit), "#22c55e", "--", f"TP {take_profit:,.2f}"))
+
+    if not levels:
+        return
+
+    x_right = ax.get_xlim()[1]
+    for y, color, ls, label in levels:
+        ax.axhline(
+            y,
+            color=color,
+            linestyle=ls,
+            linewidth=2.0 if "Entry" in label else 1.6,
+            alpha=0.92,
+            zorder=6,
+        )
+        ax.annotate(
+            label,
+            xy=(x_right, y),
+            xytext=(6, 0),
+            textcoords="offset points",
+            ha="left",
+            va="center",
+            fontsize=8,
+            color=color,
+            fontweight="bold",
+            bbox=dict(
+                boxstyle="round,pad=0.25",
+                facecolor="#0f172a",
+                edgecolor=color,
+                alpha=0.92,
+            ),
+            zorder=7,
+        )
+
+    if side in ("BUY", "SELL"):
+        ax.set_title(
+            (ax.get_title() or "") + f"  |  {side}",
+            fontsize=11,
+            color="#e2e8f0",
+        )
+
+
 def generate_static_trade_chart(
     df_chart: pd.DataFrame,
     selected_asset_name: str,
@@ -197,7 +292,11 @@ def generate_static_trade_chart(
     ema_fast: int,
     ema_slow: int,
     last_high: float = np.nan,
-    last_low: float = np.nan
+    last_low: float = np.nan,
+    entry_price: float | None = None,
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
+    signal_side: str = "",
 ) -> bytes:
     """
     Generates a static, high-res PNG byte stream using mplfinance.
@@ -243,18 +342,21 @@ def generate_static_trade_chart(
     ap = []
 
     # EMAs
-    fast_col = 'Fast_ema' if 'Fast_ema' in plot_df else 'Ema_fast' if 'Ema_fast' in plot_df else None
-    if fast_col and fast_col in plot_df.columns:
-        ap.append(mpf.make_addplot(plot_df[fast_col], color='#c084fc', width=1.2)) # Soft Purple
-    
-    slow_col = 'Slow_ema' if 'Slow_ema' in plot_df else 'Ema_slow' if 'Ema_slow' in plot_df else None
-    if slow_col and slow_col in plot_df.columns:
-        ap.append(mpf.make_addplot(plot_df[slow_col], color='#38bdf8', width=1.2)) # Soft Cyan
+    fast_col, slow_col = _resolve_ema_columns(plot_df)
+    if fast_col:
+        ap.append(mpf.make_addplot(plot_df[fast_col], color='#c084fc', width=1.2))
+    if slow_col:
+        ap.append(mpf.make_addplot(plot_df[slow_col], color='#38bdf8', width=1.2))
 
-    # BUY/SELL Markers
-    if 'Signal_vis' in plot_df.columns:
-        buy_signals = np.where(plot_df['Signal_vis'] == 'BUY', plot_df['Low'] * 0.9995, np.nan)
-        sell_signals = np.where(plot_df['Signal_vis'] == 'SELL', plot_df['High'] * 1.0005, np.nan)
+    # BUY/SELL Markers (column name varies after capitalize)
+    sig_col = None
+    for c in plot_df.columns:
+        if str(c).lower() == "signal_vis":
+            sig_col = c
+            break
+    if sig_col:
+        buy_signals = np.where(plot_df[sig_col] == 'BUY', plot_df['Low'] * 0.9995, np.nan)
+        sell_signals = np.where(plot_df[sig_col] == 'SELL', plot_df['High'] * 1.0005, np.nan)
         
         if not np.isnan(buy_signals).all():
             ap.append(mpf.make_addplot(buy_signals, type='scatter', markersize=80, marker='^', color='#10b981'))
@@ -293,7 +395,16 @@ def generate_static_trade_chart(
     matplotlib.use('Agg')
     
     fig, axlist = mpf.plot(plot_df, **kwargs)
-    
+
+    if axlist is not None and len(axlist) > 0:
+        _draw_trade_levels(
+            axlist[0],
+            entry=entry_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            side=signal_side,
+        )
+
     # Cleanup memory
     import matplotlib.pyplot as plt
     plt.close(fig)
