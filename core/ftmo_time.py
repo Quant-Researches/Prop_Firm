@@ -1,7 +1,9 @@
 """
-core/ftmo_time.py — single source of truth for FTMO / MT5 server clock.
+core/ftmo_time.py — civil FTMO timezone helpers (Europe/Helsinki).
 
 FTMO chart time = Europe/Helsinki (EET/EEST, GMT+2 / GMT+3 with DST).
+Trading scheduler, candles, and bar picker use core.broker_clock (MT5-calibrated).
+
 Daily account reset uses Europe/Prague (see main.py) — NOT for schedule slots.
 """
 from __future__ import annotations
@@ -27,7 +29,7 @@ WEEKDAY_IDX = {name: i for i, name in enumerate(WEEKDAYS)}
 
 
 def now_ftmo() -> datetime:
-    """Current time in FTMO / MT5 server timezone (timezone-aware)."""
+    """Civil FTMO time from OS clock. For trading, prefer broker_clock.broker_now()."""
     return datetime.now(FTMO_TZ)
 
 

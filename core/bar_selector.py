@@ -16,7 +16,8 @@ from datetime import datetime
 import pandas as pd
 
 from core.candle_timer import TF_MINUTES
-from core.ftmo_time import FTMO_TZ, now_ftmo
+from core.broker_clock import broker_now
+from core.ftmo_time import FTMO_TZ
 
 
 @dataclass
@@ -57,7 +58,7 @@ def resolve_signal_bar(
     Scheduled ticks: match bar OPEN timestamp to (scheduled_close - TF).
     Manual ticks: use the last fully closed bar by wall-clock.
     """
-    now_ts = _to_ftmo(now or now_ftmo())
+    now_ts = _to_ftmo(now or broker_now())
     step = TF_MINUTES.get(timeframe, 60)
     n = len(df)
     if n == 0:

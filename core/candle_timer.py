@@ -125,7 +125,7 @@ def compute_next_candle_close(
     tf : str
         Timeframe string — must be one of ``SUPPORTED_TF``.
     now : datetime, optional
-        Reference time (tz-aware, Helsinki).  Defaults to ``now_ftmo()``.
+        Reference time (tz-aware, Helsinki).  Daemon passes ``broker_now()``.
 
     Raises
     ------

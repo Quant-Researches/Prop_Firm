@@ -1,7 +1,12 @@
+import logging
+
 import MetaTrader5 as mt5
 import pandas as pd
-from core.ftmo_time import FTMO_TZ
+
+from core.broker_clock import calibrate_broker_clock, mt5_series_to_ftmo
 from core.mt5_connection import MT5Connection
+
+logger = logging.getLogger("MT5Data")
 
 def fetch_mt5_candles(symbol, timeframe_str, bar_count=500, mt5_path="", account="", password="", server=""):
     """
@@ -26,14 +31,24 @@ def fetch_mt5_candles(symbol, timeframe_str, bar_count=500, mt5_path="", account
     # Ensure symbol is active in Market Watch for real-time streaming
     if not mt5.symbol_select(symbol, True):
         return None, "MT5", f"Symbol '{symbol}' not found or subscription failed."
-        
+
+    ok, cal_msg = calibrate_broker_clock(
+        symbol,
+        account=account,
+        password=password,
+        server=server,
+        mt5_path=mt5_path,
+    )
+    if not ok:
+        logger.warning("Broker clock calibration failed: %s — candle times may be wrong", cal_msg)
+
     rates = mt5.copy_rates_from_pos(symbol, tf, 0, bar_count)
     if rates is None or len(rates) == 0:
         return None, "MT5", f"No data for {symbol}"
         
     df = pd.DataFrame(rates)
-    # MT5 epoch seconds → UTC instant → FTMO chart timezone (Europe/Helsinki)
-    df["time"] = pd.to_datetime(df["time"], unit="s", utc=True).dt.tz_convert(FTMO_TZ)
+    # MT5 epoch → corrected UTC → Europe/Helsinki (see core/broker_clock.py)
+    df["time"] = mt5_series_to_ftmo(df["time"])
     df.set_index("time", inplace=True)
     df.rename(columns={'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close', 'tick_volume': 'Volume'}, inplace=True)
     return df, "MT5", ""

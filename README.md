@@ -545,11 +545,14 @@ FTMO uses a specific set of timezones that differ from most brokers. The system 
 | Context | Timezone | Why |
 |---|---|---|
 | **MT5 Server Charts** | `Europe/Helsinki` (GMT+3) | FTMO's MetaTrader 5 servers run on Helsinki time. All candle timestamps match this. |
+| **Broker clock** | `core/broker_clock.py` | Calibrates MT5 epoch vs system UTC on connect (local or AWS). Candles, scheduler, and bar picker share one timeline. |
 | **FTMO Daily Reset** | `Europe/Prague` (CET/CEST) | FTMO calculates daily P&L and resets limits at midnight Prague time. |
-| **Schedule Matching** | `Europe/Helsinki` | All schedule slots are matched against Helsinki time so they align with candle closes. |
+| **Schedule Matching** | `Europe/Helsinki` | Daemon uses `broker_now()` so sleep-to-close matches corrected candle opens. |
 | **User Display** | IST + FTMO time shown together | The UI and notifications always display both FTMO time and IST for easy reading. |
 
 > **Why is this important?** If the system used the wrong timezone, it would fire the pipeline at the wrong time (e.g., mid-candle instead of candle-close), producing unreliable signals. Or worse, it would miscalculate the daily loss limit reset window, potentially leading to FTMO rule violations.
+
+On AWS Lightsail/EC2 and local Windows, keep **OS time sync (NTP)** enabled. The broker clock measures any MT5 epoch offset at runtime and corrects bar labels automatically (recalibrates hourly and after MT5 reconnect).
 
 ---
 

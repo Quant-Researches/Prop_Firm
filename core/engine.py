@@ -111,7 +111,19 @@ class TradingEngine:
             return {"error": err, "symbol": sym, "failure_code": DATA_FETCH_FAILED}
             
         self.storage.log_event("market", f"Fetched {len(df)} candles via {source}")
-        
+
+        from core.broker_clock import skew_status, validate_candle_timestamps
+
+        sk = skew_status()
+        if sk.get("calibrated"):
+            self.storage.log_event(
+                "info",
+                f"Broker clock: {sk.get('skew_human')} (MT5 epoch aligned to FTMO)",
+            )
+        ts_warn = validate_candle_timestamps(df, sym, tf)
+        if ts_warn:
+            self.storage.log_event("warning", f"Candle time check: {ts_warn}")
+
         ltp, ltp_err = fetch_mt5_ltp(
             sym, 
             mt5_path=mt5_path,

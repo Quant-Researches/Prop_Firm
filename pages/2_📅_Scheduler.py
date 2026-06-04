@@ -149,8 +149,26 @@ DAY_SHORT = ["Mon",    "Tue",     "Wed",       "Thu",      "Fri",    "Sat",     
 
 
 # ── Session state init ─────────────────────────────────────────────────────────
+init_session_state()
+
 if "schedules" not in st.session_state:
     st.session_state.schedules = _load_schedules()
+
+
+def _daemon_symbol_and_timeframe() -> tuple[str, str]:
+    """
+    Read symbol + timeframe from user_prefs.json (same source as main.py daemon).
+    Sync into session state so sidebar and countdown stay consistent on refresh.
+    """
+    from config.prefs import load_prefs
+
+    prefs = load_prefs()
+    sym = prefs.get("trading_symbol", "XAUUSD")
+    tf = prefs.get("timeframe", "5m")
+    st.session_state["trading_symbol"] = sym
+    st.session_state["timeframe"] = tf
+    return sym, tf
+
 
 # Get the soonest upcoming schedule ID
 next_sched_id = _get_next_schedule_id(st.session_state.schedules)
@@ -213,19 +231,21 @@ st.markdown(f"""
 
 # ── Live Countdown Panel ───────────────────────────────────────────────────────
 try:
+    from core.broker_clock import broker_now, ensure_calibrated
     from core.candle_timer import compute_next_candle_close, session_info
-    from core.ftmo_time import now_ftmo as _now_ftmo
+    from config.prefs import load_prefs
 
-    _symbol = st.session_state.get("trading_symbol", "XAUUSD")
-    _tf     = st.session_state.get("timeframe", "1h")
-    _now    = _now_ftmo()
+    _symbol, _tf = _daemon_symbol_and_timeframe()
+    _prefs = load_prefs()
+    ensure_calibrated(_prefs)
+    _now    = broker_now(_symbol)
     _sess   = session_info(_symbol)
     _next_dt, _sleep_sec = compute_next_candle_close(_symbol, _tf, _now)
 
     _hh  = int(_sleep_sec // 3600)
     _mm  = int((_sleep_sec % 3600) // 60)
     _ss  = int(_sleep_sec % 60)
-    _day_label = _next_dt.strftime("%A")
+    _close_label = _next_dt.strftime("%a %d %b %Y %H:%M")
 
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,#1e1b4b 0%,#0d1225 100%);
@@ -235,10 +255,13 @@ try:
         <div>
             <div style="font-size:0.65rem;color:#64748b;text-transform:uppercase;
                         letter-spacing:2px;margin-bottom:4px;">NEXT CANDLE CLOSE</div>
-            <div style="font-size:1.5rem;font-weight:800;color:#38bdf8;
+            <div style="font-size:1.3rem;font-weight:800;color:#38bdf8;
                         font-family:'JetBrains Mono',monospace;letter-spacing:1px;">
-                {_day_label} {_next_dt.strftime('%H:%M')}
-                <span style="font-size:0.85rem;color:#64748b;font-weight:400;">FTMO</span>
+                {_close_label}
+                <span style="font-size:0.85rem;color:#64748b;font-weight:400;"> FTMO</span>
+            </div>
+            <div style="font-size:0.65rem;color:#475569;margin-top:4px;">
+                Source: config/user_prefs.json (daemon)
             </div>
         </div>
         <div style="text-align:center;">
@@ -276,7 +299,8 @@ except Exception:
 
 st.info("🕒 **TIMEZONE:** All times are **FTMO MT5 Server Time (Europe/Helsinki)**. "
         "The daemon sleeps **exactly** until each candle closes — no 10-second polling. "
-        "Use the panel above to see when the next pipeline tick will fire.")
+        "Countdown uses **Settings** (`config/user_prefs.json`) — same symbol/timeframe as `main.py`, "
+        "not `schedules.json`.")
 
 
 

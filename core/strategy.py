@@ -461,14 +461,14 @@ class RealTimeSignalGenerator:
         
         # 4. Resolve signal bar by timestamp (not blind iloc[-1])
         from core.bar_selector import resolve_signal_bar
-        from core.ftmo_time import now_ftmo
+        from core.broker_clock import broker_now
 
         close_for_lookup = None if is_manual else scheduled_close
         selection = resolve_signal_bar(
             self.data,
             self.interval,
             scheduled_close=close_for_lookup,
-            now=now_ftmo(),
+            now=broker_now(self.symbol),
         )
         signal_row = self.data.iloc[selection.index]
         

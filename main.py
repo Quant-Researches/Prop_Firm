@@ -38,6 +38,7 @@ if str(ROOT) not in sys.path:
 
 from config.prefs import ensure_prefs_file, load_prefs, mt5_configured
 from core.engine import TradingEngine
+from core.broker_clock import broker_now, ensure_calibrated, skew_status
 from core.ftmo_time import (
     ftmo_day_name,
     ftmo_display,
@@ -157,6 +158,11 @@ def ensure_mt5_connected(prefs: dict) -> None:
             logger.info("MT5 auto-recovery successful.")
         else:
             logger.error("MT5 auto-recovery failed: %s", mt5.last_error())
+            return
+
+    ok, msg = ensure_calibrated(prefs)
+    if not ok:
+        logger.warning("Broker clock not calibrated: %s", msg)
 
 
 # ── Non-blocking pipeline fire ────────────────────────────────────────────────
@@ -250,6 +256,12 @@ def run_daily_reset(engine: TradingEngine, prefs: dict, prefs_path: Path, reset_
     )
     if not MT5Connection.connect(acc, pwd, svr, path):
         raise RuntimeError(f"MT5 reconnect failed: {mt5.last_error()}")
+
+    from core.broker_clock import ensure_calibrated
+
+    ok, cal_msg = ensure_calibrated(prefs, force=True)
+    if not ok:
+        logger.warning("Broker clock recalibration after daily reset: %s", cal_msg)
 
     acc_info = mt5.account_info()
     if not acc_info:
@@ -355,6 +367,14 @@ def main_loop() -> None:
             "pipeline ticks will fail until Settings are saved."
         )
 
+    if mt5_configured(prefs):
+        ensure_mt5_connected(prefs)
+        sk = skew_status()
+        if sk.get("calibrated"):
+            logger.info("Broker clock at startup: %s", sk.get("skew_human"))
+        else:
+            logger.warning("Broker clock not calibrated at startup — connect MT5")
+
     # Restore last-fired key from disk (survives daemon restart mid-minute)
     last_fired_key: str | None = _load_last_fired()
     logger.info("Startup last_fired_key=%s", last_fired_key)
@@ -365,7 +385,8 @@ def main_loop() -> None:
         prefs  = load_prefs()
         symbol = prefs.get("trading_symbol", "XAUUSD")
         tf     = prefs.get("timeframe",      "1h")
-        now    = now_ftmo()
+        ensure_mt5_connected(prefs)
+        now    = broker_now(symbol)
 
         # 2. Daily reset (Prague calendar day — runs on first wake after reset time)
         prefs = _try_daily_reset(engine, prefs, prefs_path)
@@ -398,7 +419,7 @@ def main_loop() -> None:
         # 5. Post-sleep: daily reset may have been missed during sleep
         prefs = _try_daily_reset(engine, prefs, prefs_path)
 
-        wake_now = now_ftmo()
+        wake_now = broker_now(symbol)
         if wake_now.weekday() >= 5:          # Saturday=5, Sunday=6
             logger.info(
                 "Weekend (%s) — no pipeline tick. Sleeping to Monday.",
@@ -441,9 +462,18 @@ def main_loop() -> None:
 def check_schedule_now() -> None:
     """Print whether any schedule slot matches current FTMO minute."""
     ensure_prefs_file()
-    now    = now_ftmo()
+    prefs  = load_prefs()
+    symbol = prefs.get("trading_symbol", "XAUUSD")
+    tf     = prefs.get("timeframe", "1h")
+    ensure_mt5_connected(prefs)
+    now    = broker_now(symbol)
     scheds = load_schedules()
     print(ftmo_display(now))
+    sk = skew_status()
+    if sk.get("calibrated"):
+        print(f"Broker clock: {sk.get('skew_human')} (MT5 epoch correction)")
+    else:
+        print("Broker clock: NOT calibrated — connect MT5 first")
     print(f"Day (EN): {ftmo_day_name(now)} | Time: {ftmo_hhmm(now)}")
     matches = [s for s in scheds if schedule_matches_now(s, now)]
     if matches:
@@ -456,9 +486,6 @@ def check_schedule_now() -> None:
             print(f"Next slot: {nxt['day']} {nxt['time']} (FTMO) — in {nxt_dt - now}")
 
     # Also show sleep-to-close calculation
-    prefs  = load_prefs()
-    symbol = prefs.get("trading_symbol", "XAUUSD")
-    tf     = prefs.get("timeframe", "1h")
     try:
         nxt_close, secs = compute_next_candle_close(symbol, tf, now)
         print(
@@ -473,9 +500,14 @@ def run_once_now() -> None:
     """Run a single pipeline tick immediately (for testing)."""
     ensure_prefs_file()
     prefs  = load_prefs()
+    symbol = prefs.get("trading_symbol", "XAUUSD")
+    ensure_mt5_connected(prefs)
     engine = TradingEngine(mode="live")
-    now_hel = now_ftmo()
+    now_hel = broker_now(symbol)
     print(f"Manual tick — {ftmo_display(now_hel)}")
+    sk = skew_status()
+    if sk.get("calibrated"):
+        print(f"Broker clock: {sk.get('skew_human')}")
     _fire_pipeline(engine, prefs, now_hel, is_manual=True)
     time.sleep(3)   # give notification thread time to start
     print("Done. Check Telegram / data/events.jsonl")
